@@ -1,0 +1,15 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "OrderedCollection",
+  "id": "https://nigini.me/activitypub/outbox",
+  "totalItems": 1,
+  "orderedItems": [
+    {
+      "type": "Create",
+      "id": "https://nigini.me/activitypub/activities/create-1",
+      "actor": "https://nigini.me/activitypub/actor",
+      "published": "2025-01-01T00:00:00Z",
+      "object": "https://nigini.me/activitypub/posts/hello-world"
+    }
+  ]
+}

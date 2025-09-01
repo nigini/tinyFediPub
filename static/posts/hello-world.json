@@ -1,0 +1,10 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Article",
+  "id": "https://nigini.me/activitypub/posts/hello-world",
+  "url": "https://nigini.me/blog/hello-world",
+  "attributedTo": "https://nigini.me/activitypub/actor",
+  "published": "2025-01-01T00:00:00Z",
+  "name": "Hello World",
+  "content": "This is my first blog post on ActivityPub!"
+}

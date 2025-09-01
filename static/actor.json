@@ -1,0 +1,18 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Person",
+  "id": "https://nigini.me/activitypub/actor",
+  "preferredUsername": "blog",
+  "name": "Nigini's Blog",
+  "summary": "Personal blog posts from nigini.me",
+  "inbox": "https://nigini.me/activitypub/inbox",
+  "outbox": "https://nigini.me/activitypub/outbox",
+  "followers": "https://nigini.me/activitypub/followers",
+  "following": "https://nigini.me/activitypub/following",
+  "url": "https://nigini.me",
+  "publicKey": {
+    "id": "https://nigini.me/activitypub/actor#main-key",
+    "owner": "https://nigini.me/activitypub/actor",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n(your public key here)\n-----END PUBLIC KEY-----"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "subject": "acct:blog@nigini.me",
+  "links": [
+    {
+      "rel": "self",
+      "type": "application/activity+json",
+      "href": "https://nigini.me/activitypub/actor"
+    }
+  ]
+}
