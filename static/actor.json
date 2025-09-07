@@ -1,18 +1,18 @@
 {
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Person",
-  "id": "https://nigini.me/activitypub/actor",
+  "id": "http://127.0.0.1:5000/activitypub/actor",
   "preferredUsername": "blog",
-  "name": "Nigini's Blog",
-  "summary": "Personal blog posts from nigini.me",
-  "inbox": "https://nigini.me/activitypub/inbox",
-  "outbox": "https://nigini.me/activitypub/outbox",
-  "followers": "https://nigini.me/activitypub/followers",
-  "following": "https://nigini.me/activitypub/following",
-  "url": "https://nigini.me",
+  "name": "localhost's blog",
+  "summary": "A personal blog with federated posts",
+  "inbox": "http://127.0.0.1:5000/activitypub/inbox",
+  "outbox": "http://127.0.0.1:5000/activitypub/outbox",
+  "followers": "http://127.0.0.1:5000/activitypub/followers",
+  "following": "http://127.0.0.1:5000/activitypub/following",
+  "url": "http://127.0.0.1:5000",
   "publicKey": {
-    "id": "https://nigini.me/activitypub/actor#main-key",
-    "owner": "https://nigini.me/activitypub/actor",
+    "id": "http://127.0.0.1:5000/activitypub/actor#main-key",
+    "owner": "http://127.0.0.1:5000/activitypub/actor",
     "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n(your public key here)\n-----END PUBLIC KEY-----"
   }
 }

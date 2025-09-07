@@ -1,0 +1,256 @@
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "outcome": "inapplicable",
+    "info": "object has no `liked` property",
+    "pointer": {
+      "object": {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "followers": "http://127.0.0.1:5000/activitypub/followers",
+        "following": "http://127.0.0.1:5000/activitypub/following",
+        "id": "http://127.0.0.1:5000/activitypub/actor",
+        "inbox": "http://127.0.0.1:5000/activitypub/inbox",
+        "name": "localhost's blog",
+        "outbox": "http://127.0.0.1:5000/activitypub/outbox",
+        "preferredUsername": "blog",
+        "publicKey": {
+          "id": "http://127.0.0.1:5000/activitypub/actor#main-key",
+          "owner": "http://127.0.0.1:5000/activitypub/actor",
+          "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n(your public key here)\n-----END PUBLIC KEY-----"
+        },
+        "summary": "A personal blog with federated posts",
+        "type": "Person",
+        "url": "http://127.0.0.1:5000"
+      }
+    }
+  },
+  "test": {
+    "slug": "liked-collection-must-be-a-collection",
+    "description": "tests whether an ActivityPub Object has a liked collection with an appropriate Collection type",
+    "name": "An ActivityPub Object `liked` Collection Must be a Collection",
+    "id": "urn:uuid:018c3df2-d6d8-7f62-805b-b71a96cc6170",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:d2db8da3-25d4-4dd9-9c9c-b2793fd899cf",
+        "url": "https://socialweb.coop/activitypub/behaviors/d2db8da3-25d4-4dd9-9c9c-b2793fd899cf/"
+      }
+    ]
+  },
+  "input": {
+    "object": "{\n  \"@context\": \"https://www.w3.org/ns/activitystreams\",\n  \"followers\": \"http://127.0.0.1:5000/activitypub/followers\",\n  \"following\": \"http://127.0.0.1:5000/activitypub/following\",\n  \"id\": \"http://127.0.0.1:5000/activitypub/actor\",\n  \"inbox\": \"http://127.0.0.1:5000/activitypub/inbox\",\n  \"name\": \"localhost's blog\",\n  \"outbox\": \"http://127.0.0.1:5000/activitypub/outbox\",\n  \"preferredUsername\": \"blog\",\n  \"publicKey\": {\n    \"id\": \"http://127.0.0.1:5000/activitypub/actor#main-key\",\n    \"owner\": \"http://127.0.0.1:5000/activitypub/actor\",\n    \"publicKeyPem\": \"-----BEGIN PUBLIC KEY-----\\n(your public key here)\\n-----END PUBLIC KEY-----\"\n  },\n  \"summary\": \"A personal blog with federated posts\",\n  \"type\": \"Person\",\n  \"url\": \"http://127.0.0.1:5000\"\n}\n"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "outcome": "inapplicable",
+    "info": "object has no `likes` property",
+    "pointer": {
+      "object": {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "followers": "http://127.0.0.1:5000/activitypub/followers",
+        "following": "http://127.0.0.1:5000/activitypub/following",
+        "id": "http://127.0.0.1:5000/activitypub/actor",
+        "inbox": "http://127.0.0.1:5000/activitypub/inbox",
+        "name": "localhost's blog",
+        "outbox": "http://127.0.0.1:5000/activitypub/outbox",
+        "preferredUsername": "blog",
+        "publicKey": {
+          "id": "http://127.0.0.1:5000/activitypub/actor#main-key",
+          "owner": "http://127.0.0.1:5000/activitypub/actor",
+          "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n(your public key here)\n-----END PUBLIC KEY-----"
+        },
+        "summary": "A personal blog with federated posts",
+        "type": "Person",
+        "url": "http://127.0.0.1:5000"
+      }
+    }
+  },
+  "test": {
+    "slug": "likes-collection-must-be-a-collection",
+    "description": "tests whether an ActivityPub Object has a likes collection with an appropriate Collection type",
+    "name": "An ActivityPub Object `likes` Collection Must be a Collection",
+    "id": "urn:uuid:200b9bc8-aae3-46f2-a6ab-5366042c0f6e",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:f965e989-4084-4f9d-9119-6a7ea13bcb64",
+        "url": "https://socialweb.coop/activitypub/behaviors/f965e989-4084-4f9d-9119-6a7ea13bcb64/"
+      }
+    ]
+  },
+  "input": {
+    "object": "{\n  \"@context\": \"https://www.w3.org/ns/activitystreams\",\n  \"followers\": \"http://127.0.0.1:5000/activitypub/followers\",\n  \"following\": \"http://127.0.0.1:5000/activitypub/following\",\n  \"id\": \"http://127.0.0.1:5000/activitypub/actor\",\n  \"inbox\": \"http://127.0.0.1:5000/activitypub/inbox\",\n  \"name\": \"localhost's blog\",\n  \"outbox\": \"http://127.0.0.1:5000/activitypub/outbox\",\n  \"preferredUsername\": \"blog\",\n  \"publicKey\": {\n    \"id\": \"http://127.0.0.1:5000/activitypub/actor#main-key\",\n    \"owner\": \"http://127.0.0.1:5000/activitypub/actor\",\n    \"publicKeyPem\": \"-----BEGIN PUBLIC KEY-----\\n(your public key here)\\n-----END PUBLIC KEY-----\"\n  },\n  \"summary\": \"A personal blog with federated posts\",\n  \"type\": \"Person\",\n  \"url\": \"http://127.0.0.1:5000\"\n}\n"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "outcome": "inapplicable",
+    "info": "inputs.object does not have a shares property to test"
+  },
+  "test": {
+    "slug": "shares-collection-must-be-a-collection",
+    "description": "This test case tests that an actor's shares collection is an expected kind of collection",
+    "name": "shares collection MUST be either an OrderedCollection or a Collection",
+    "id": "urn:uuid:b03a5245-1072-426d-91b3-a3d412d45ae8",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:937ae4e2-dd33-40c7-be1d-3ecac7f9fad5",
+        "url": "https://socialweb.coop/activitypub/behaviors/937ae4e2-dd33-40c7-be1d-3ecac7f9fad5/"
+      }
+    ]
+  },
+  "input": {
+    "object": "{\n  \"@context\": \"https://www.w3.org/ns/activitystreams\",\n  \"followers\": \"http://127.0.0.1:5000/activitypub/followers\",\n  \"following\": \"http://127.0.0.1:5000/activitypub/following\",\n  \"id\": \"http://127.0.0.1:5000/activitypub/actor\",\n  \"inbox\": \"http://127.0.0.1:5000/activitypub/inbox\",\n  \"name\": \"localhost's blog\",\n  \"outbox\": \"http://127.0.0.1:5000/activitypub/outbox\",\n  \"preferredUsername\": \"blog\",\n  \"publicKey\": {\n    \"id\": \"http://127.0.0.1:5000/activitypub/actor#main-key\",\n    \"owner\": \"http://127.0.0.1:5000/activitypub/actor\",\n    \"publicKeyPem\": \"-----BEGIN PUBLIC KEY-----\\n(your public key here)\\n-----END PUBLIC KEY-----\"\n  },\n  \"summary\": \"A personal blog with federated posts\",\n  \"type\": \"Person\",\n  \"url\": \"http://127.0.0.1:5000\"\n}\n"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "outcome": "passed",
+    "source": []
+  },
+  "test": {
+    "slug": "actor-objects-must-have-inbox-outbox-properties",
+    "description": "This rule checks whether a given Actor Object has the properties inbox and outbox.",
+    "name": "Actor Objects Must Have Properties inbox and outbox",
+    "id": "urn:uuid:acaacb5f-8f7e-4f28-8d81-c7955070a767",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:cc3f730a-37a9-4af9-948f-7c8a0b7f6c41",
+        "url": "https://socialweb.coop/activitypub/behaviors/cc3f730a-37a9-4af9-948f-7c8a0b7f6c41/"
+      },
+      {
+        "id": "urn:uuid:b8647b47-defb-483c-b468-8602d1124169",
+        "url": "https://socialweb.coop/activitypub/behaviors/b8647b47-defb-483c-b468-8602d1124169/"
+      }
+    ]
+  },
+  "input": {
+    "actor": "{\n  \"@context\": \"https://www.w3.org/ns/activitystreams\",\n  \"followers\": \"http://127.0.0.1:5000/activitypub/followers\",\n  \"following\": \"http://127.0.0.1:5000/activitypub/following\",\n  \"id\": \"http://127.0.0.1:5000/activitypub/actor\",\n  \"inbox\": \"http://127.0.0.1:5000/activitypub/inbox\",\n  \"name\": \"localhost's blog\",\n  \"outbox\": \"http://127.0.0.1:5000/activitypub/outbox\",\n  \"preferredUsername\": \"blog\",\n  \"publicKey\": {\n    \"id\": \"http://127.0.0.1:5000/activitypub/actor#main-key\",\n    \"owner\": \"http://127.0.0.1:5000/activitypub/actor\",\n    \"publicKeyPem\": \"-----BEGIN PUBLIC KEY-----\\n(your public key here)\\n-----END PUBLIC KEY-----\"\n  },\n  \"summary\": \"A personal blog with federated posts\",\n  \"type\": \"Person\",\n  \"url\": \"http://127.0.0.1:5000\"\n}\n"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "outcome": "passed"
+  },
+  "test": {
+    "slug": "actor-must-serve-as2-object-to-get",
+    "description": "This rule checks that URLs of ActivityPub objects can be resolved to a representation with well-known media type for further processing.",
+    "name": "ActivityPub Servers Must Serve Objects in Response to an HTTP GET Request Accepting ActivityStreams 2.0 Media Type",
+    "id": "urn:uuid:e7ee491d-88d7-4e67-80c8-f74781bb247c",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:08549639-2888-4ee2-a320-97fc7ee32e00",
+        "url": "https://socialweb.coop/activitypub/behaviors/08549639-2888-4ee2-a320-97fc7ee32e00/"
+      }
+    ]
+  },
+  "input": {
+    "id": "http://127.0.0.1:5000/activitypub/actor",
+    "time": "T10S"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "type": "TestResult",
+    "outcome": "inapplicable",
+    "info": "got 404 response status (not found) when resolving inbox string to inbox object",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:5000/activitypub/inbox",
+        "status": 404,
+        "headers": {
+          "connection": "close",
+          "content-length": "207",
+          "content-type": "text/html; charset=utf-8",
+          "date": "Sun, 07 Sep 2025 05:20:26 GMT",
+          "server": "Werkzeug/3.1.3 Python/3.12.3"
+        }
+      }
+    ]
+  },
+  "test": {
+    "slug": "inbox-must-be-an-orderedcollection",
+    "description": "This rule checks whether the inbox property of an object appears to be an OrderedCollection",
+    "name": "inbox must be an OrderedCollection",
+    "id": "urn:uuid:5e94d155-ed4a-4d71-b797-d7c387736ecf",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:4edf6768-c751-448f-96ac-4ef44cb4291f",
+        "url": "https://socialweb.coop/activitypub/behaviors/4edf6768-c751-448f-96ac-4ef44cb4291f/"
+      }
+    ]
+  },
+  "input": {
+    "object": "{\n  \"@context\": \"https://www.w3.org/ns/activitystreams\",\n  \"followers\": \"http://127.0.0.1:5000/activitypub/followers\",\n  \"following\": \"http://127.0.0.1:5000/activitypub/following\",\n  \"id\": \"http://127.0.0.1:5000/activitypub/actor\",\n  \"inbox\": \"http://127.0.0.1:5000/activitypub/inbox\",\n  \"name\": \"localhost's blog\",\n  \"outbox\": \"http://127.0.0.1:5000/activitypub/outbox\",\n  \"preferredUsername\": \"blog\",\n  \"publicKey\": {\n    \"id\": \"http://127.0.0.1:5000/activitypub/actor#main-key\",\n    \"owner\": \"http://127.0.0.1:5000/activitypub/actor\",\n    \"publicKeyPem\": \"-----BEGIN PUBLIC KEY-----\\n(your public key here)\\n-----END PUBLIC KEY-----\"\n  },\n  \"summary\": \"A personal blog with federated posts\",\n  \"type\": \"Person\",\n  \"url\": \"http://127.0.0.1:5000\"\n}\n",
+    "time": "T10S"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
+{
+  "type": [
+    "Assertion"
+  ],
+  "result": {
+    "type": "TestResult",
+    "outcome": "passed"
+  },
+  "test": {
+    "slug": "outbox-must-be-an-orderedcollection",
+    "description": "This rule checks whether the outbox property of an object appears to be an OrderedCollection",
+    "name": "outbox must be an OrderedCollection",
+    "id": "urn:uuid:4af549f4-3797-4d99-a151-67c3d8feaa46",
+    "requirementReference": [
+      {
+        "id": "urn:uuid:003a3be2-fb58-4812-a3a3-795067254327",
+        "url": "https://socialweb.coop/activitypub/behaviors/003a3be2-fb58-4812-a3a3-795067254327"
+      }
+    ]
+  },
+  "input": {
+    "object": "{\n  \"@context\": \"https://www.w3.org/ns/activitystreams\",\n  \"followers\": \"http://127.0.0.1:5000/activitypub/followers\",\n  \"following\": \"http://127.0.0.1:5000/activitypub/following\",\n  \"id\": \"http://127.0.0.1:5000/activitypub/actor\",\n  \"inbox\": \"http://127.0.0.1:5000/activitypub/inbox\",\n  \"name\": \"localhost's blog\",\n  \"outbox\": \"http://127.0.0.1:5000/activitypub/outbox\",\n  \"preferredUsername\": \"blog\",\n  \"publicKey\": {\n    \"id\": \"http://127.0.0.1:5000/activitypub/actor#main-key\",\n    \"owner\": \"http://127.0.0.1:5000/activitypub/actor\",\n    \"publicKeyPem\": \"-----BEGIN PUBLIC KEY-----\\n(your public key here)\\n-----END PUBLIC KEY-----\"\n  },\n  \"summary\": \"A personal blog with federated posts\",\n  \"type\": \"Person\",\n  \"url\": \"http://127.0.0.1:5000\"\n}\n",
+    "time": "T10S"
+  },
+  "@context": [
+    "https://socialweb.coop/ns/testing/context.json",
+    "https://www.w3.org/ns/activitystreams"
+  ]
+}
