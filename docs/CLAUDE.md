@@ -66,8 +66,10 @@ curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/po
 4. Server serves all files without restart needed (Flask auto-reload in debug mode)
 
 **Key Features:**
-- **Memory efficient**: Outbox streams from files without loading all activities
+- **Memory efficient**: Outbox streams from files without loading all activities (using Jinja2 generators)
+- **Template-driven**: All ActivityPub entities generated from Jinja2 templates for maintainability
 - **Self-healing**: Outbox can be rebuilt from activities directory at any time
+- **Error resilient**: Malformed activity files are skipped gracefully with warnings
 - **Simple deployment**: Just files, no database required
 - **Flexible URLs**: Post URLs can point anywhere (existing blog, external sites, etc.)
 - **Secure**: Private keys never committed, proper ActivityPub content negotiation
@@ -77,7 +79,8 @@ curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/po
 Comprehensive test suite in `tests/` covering:
 - Post ID generation (timestamp + optional slug)
 - Post/activity creation and file operations
-- Outbox regeneration from activities
+- Outbox regeneration from activities (with streaming templates)
+- Malformed activity file handling and error resilience
 - CLI workflow integration
 - All Flask endpoints (webfinger, actor, outbox, posts, activities)
 - Content negotiation and error handling
@@ -86,13 +89,14 @@ Comprehensive test suite in `tests/` covering:
 
 ✅ **Implemented:**
 - WebFinger discovery
-- Actor profile with dynamic generation
-- Outbox collection (dynamically generated)
-- Individual post and activity endpoints
+- Actor profile with dynamic generation (Jinja2 templated)
+- Outbox collection (streaming template generation)
+- Individual post and activity endpoints (templated)
 - CLI tool for post creation
 - Proper ActivityPub content types and headers
-- Comprehensive test suite
+- Comprehensive test suite with error handling tests
 - Secure key management
+- Extensible template system for future ActivityPub types
 
 ⏳ **Missing (for full federation):**
 - Inbox endpoint (receiving activities from other servers)

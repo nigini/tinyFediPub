@@ -9,6 +9,7 @@ Simple file-based ActivityPub implementation that serves federated content from 
 ## Tech Stack
 
 - **Flask** - Lightweight web framework
+- **Jinja2** - Template engine for ActivityPub entities
 - **File-based storage** - All content served from static JSON files
 - **Zero dependencies** - Minimal external requirements
 
@@ -89,5 +90,30 @@ Use the CLI tool to create new ActivityPub posts:
 
 This automatically:
 - Creates the post JSON in `static/posts/`
-- Generates the Create activity in `static/activities/`  
+- Generates the Create activity in `static/activities/`
 - Regenerates the outbox collection
+
+## Template System
+
+ActivityPub entities are generated using Jinja2 templates for maintainability and extensibility:
+
+```
+templates/
+├── objects/          # ActivityStreams Object types
+│   ├── actor.json.j2      # Person/Service actors
+│   ├── article.json.j2    # Blog posts, articles
+│   └── note.json.j2       # Short messages (future)
+├── activities/       # ActivityStreams Activity types
+│   ├── create.json.j2     # Create activities
+│   └── update.json.j2     # Update activities (future)
+└── collections/      # ActivityStreams Collections
+    └── outbox.json.j2     # Outbox collections (future)
+```
+
+**Design Philosophy:**
+- **Type-specific templates** - Each ActivityStreams type has its own template
+- **Extensible** - Easy to add new object types (Note, Image, Event) and activity types (Like, Follow, Announce)
+- **Spec-compliant** - Templates ensure proper ActivityPub/ActivityStreams structure
+- **Configurable** - All values injected from `config.json` and runtime data
+
+Current implementation supports `Article` objects and `Create` activities, with template structure ready for future ActivityStreams types.

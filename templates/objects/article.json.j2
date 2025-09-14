@@ -1,0 +1,15 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "{{ post_type | default('Article') }}",
+  "id": "{{ website_url }}/{{ namespace }}/posts/{{ post_id }}",
+  "url": "{{ post_url }}",
+  "attributedTo": "{{ website_url }}/{{ namespace }}/actor",
+  "published": "{{ published }}",
+  "name": "{{ title }}"{% if content or summary %},{% endif %}
+  {% if content %}
+  "content": "{{ content }}"{% if summary %},{% endif %}
+  {% endif %}
+  {% if summary %}
+  "summary": "{{ summary }}"
+  {% endif %}
+}

@@ -1,0 +1,8 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "{{ activity_type }}",
+  "id": "{{ activity_id }}",
+  "actor": "{{ actor_id }}",
+  "published": "{{ published }}"{% if object %},
+  "object": {{ object | tojson }}{% endif %}
+}

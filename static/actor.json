@@ -9,10 +9,5 @@
   "outbox": "https://127.0.0.1:5000/activitypub/outbox",
   "followers": "https://127.0.0.1:5000/activitypub/followers",
   "following": "https://127.0.0.1:5000/activitypub/following",
-  "url": "https://127.0.0.1:5000",
-  "publicKey": {
-    "id": "https://127.0.0.1:5000/activitypub/actor#main-key",
-    "owner": "https://127.0.0.1:5000/activitypub/actor",
-    "publicKeyPem": null
-  }
+  "url": "https://127.0.0.1:5000"
 }

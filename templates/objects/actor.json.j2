@@ -1,0 +1,34 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "{{ actor_type | default('Person') }}",
+  "id": "{{ website_url }}/{{ namespace }}/actor",
+  "preferredUsername": "{{ username }}",
+  "name": "{{ actor_name }}",
+  "summary": "{{ actor_summary }}",
+  "inbox": "{{ website_url }}/{{ namespace }}/inbox",
+  "outbox": "{{ website_url }}/{{ namespace }}/outbox",
+  "followers": "{{ website_url }}/{{ namespace }}/followers",
+  "following": "{{ website_url }}/{{ namespace }}/following",
+  "url": "{{ website_url }}"{% if public_key_pem or icon or image %},{% endif %}
+  {% if public_key_pem %}
+  "publicKey": {
+    "id": "{{ website_url }}/{{ namespace }}/actor#main-key",
+    "owner": "{{ website_url }}/{{ namespace }}/actor",
+    "publicKeyPem": "{{ public_key_pem }}"
+  }{% if icon or image %},{% endif %}
+  {% endif %}
+  {% if icon %}
+  "icon": {
+    "type": "Image",
+    "mediaType": "{{ icon.media_type | default('image/png') }}",
+    "url": "{{ icon.url }}"
+  }{% if image %},{% endif %}
+  {% endif %}
+  {% if image %}
+  "image": {
+    "type": "Image",
+    "mediaType": "{{ image.media_type | default('image/jpeg') }}",
+    "url": "{{ image.url }}"
+  }
+  {% endif %}
+}

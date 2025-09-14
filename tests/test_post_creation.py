@@ -169,11 +169,70 @@ class TestPostCreation(unittest.TestCase):
     def test_get_actor_info_missing_file(self):
         """Test actor info when file doesn't exist"""
         os.remove('static/actor.json')
-        
+
         with patch('builtins.print'):  # Suppress warning print
             actor = get_actor_info()
-        
+
         self.assertIsNone(actor)
+
+    def test_regenerate_outbox_with_malformed_activities(self):
+        """Test outbox generation skips malformed activity files gracefully"""
+        # Create a valid activity first
+        post_obj, post_id = create_post("Good Post", "Valid content", "https://example.com/good")
+        activity_obj, activity_id = create_activity(post_obj, post_id)
+
+        # Verify we have exactly one valid activity file at this point
+        activities_files = [f for f in os.listdir('static/activities') if f.endswith('.json')]
+        self.assertEqual(len(activities_files), 1, f"Expected 1 activity file, found {len(activities_files)}: {activities_files}")
+
+        # Create malformed JSON file
+        malformed_json_path = 'static/activities/malformed.json'
+        with open(malformed_json_path, 'w') as f:
+            f.write('{ "invalid": json syntax here')
+
+        # Create structurally invalid but well-formed JSON
+        invalid_structure_path = 'static/activities/invalid-structure.json'
+        invalid_activity = {
+            "someField": "value",
+            "missing": "required fields like type, id, actor",
+            "notAnActivity": True
+        }
+        with open(invalid_structure_path, 'w') as f:
+            json.dump(invalid_activity, f)
+
+        # Should complete successfully, skipping bad files
+        import io
+        import sys
+        from contextlib import redirect_stdout
+
+        # Capture stdout to verify warnings are printed
+        captured_output = io.StringIO()
+        with redirect_stdout(captured_output):
+            regenerate_outbox()
+
+        # Verify warnings were printed
+        output = captured_output.getvalue()
+        self.assertIn('Warning: Skipping malformed activity file', output)
+        self.assertIn('malformed.json', output)
+        self.assertIn('invalid-structure.json', output)
+
+        # Verify outbox was created successfully
+        self.assertTrue(os.path.exists('static/outbox.json'))
+
+        with open('static/outbox.json', 'r') as f:
+            outbox = json.load(f)
+
+        # Verify the correction worked: totalItems should match orderedItems length
+        self.assertEqual(outbox['totalItems'], len(outbox['orderedItems']),
+                        "totalItems should be corrected to match actual valid activities")
+
+        # Should have exactly 1 valid activity (the one we created)
+        self.assertEqual(len(outbox['orderedItems']), 1,
+                        "Should contain exactly 1 valid activity after skipping malformed files")
+
+        # All activities should be valid Create activities
+        for item in outbox['orderedItems']:
+            self.assertEqual(item['type'], 'Create')
 
 
 class TestCLIIntegration(unittest.TestCase):

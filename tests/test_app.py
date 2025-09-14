@@ -23,7 +23,7 @@ class TestFlaskApp(unittest.TestCase):
         
         # Create test config
         test_config = {
-            "server": {"domain": "app-test.example.com", "host": "127.0.0.1", "port": 5000, "debug": True},
+            "server": {"domain": "app-test.example.com", "protocol": "https", "host": "127.0.0.1", "port": 5000, "debug": True},
             "activitypub": {"username": "testuser", "actor_name": "Test User", "actor_summary": "Test actor", "namespace": "activitypub"},
             "security": {"public_key_file": "test_public.pem", "private_key_file": "test_private.pem"}
         }

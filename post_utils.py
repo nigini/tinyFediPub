@@ -5,6 +5,7 @@ Utilities for creating ActivityPub posts
 import json
 import re
 from datetime import datetime
+from template_utils import templates
 
 def load_config():
     """Load configuration from config.json"""
@@ -57,26 +58,20 @@ def create_post(title, content, url, summary=None, post_id=None):
     # Generate post ID if not provided
     if post_id is None:
         post_id = generate_post_id(title)
-    
-    # Build ActivityPub URLs
-    domain = config['server']['domain']
-    namespace = config['activitypub']['namespace']
-    website_url = f"https://{domain}"
-    
-    # Create post object
-    post = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "Article",
-        "id": f"{website_url}/{namespace}/posts/{post_id}",
-        "url": url,  # User-provided URL
-        "attributedTo": f"{website_url}/{namespace}/actor",
-        "published": datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
-        "name": title,
-        "content": content
-    }
-    
-    if summary:
-        post["summary"] = summary
+
+    # Generate published timestamp
+    published = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    # Create post object using template
+    post = templates.render_article(
+        config=config,
+        post_id=post_id,
+        title=title,
+        content=content,
+        post_url=url,
+        summary=summary,
+        published=published
+    )
     
     # Save post file
     posts_dir = 'static/posts'
@@ -120,23 +115,21 @@ def create_activity(post_object, post_id):
     actor = get_actor_info()
     if not actor:
         raise Exception("Cannot create activity: actor.json not found. Please run the server first.")
-    
+
     # Generate activity ID
     activity_id = f"create-{post_id}"
-    
+
     # Extract domain/namespace from actor ID
     actor_id = actor['id']
     base_url = actor_id.rsplit('/actor', 1)[0]  # Remove '/actor' suffix
-    
-    # Create activity object
-    activity = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "Create",
-        "id": f"{base_url}/activities/{activity_id}",
-        "actor": actor_id,
-        "published": post_object["published"],  # Same timestamp as post
-        "object": post_object
-    }
+
+    # Create activity object using template
+    activity = templates.render_create_activity(
+        activity_id=f"{base_url}/activities/{activity_id}",
+        actor_id=actor_id,
+        published=post_object["published"],
+        post_object=post_object
+    )
     
     # Save activity file
     activities_dir = 'static/activities'
@@ -150,68 +143,27 @@ def create_activity(post_object, post_id):
 
 def regenerate_outbox():
     """
-    Regenerate outbox.json by scanning activities directory
-    Writes directly to file without loading all activities into memory
+    Regenerate outbox.json by streaming activities directory using template generator
+    Memory efficient - only loads one activity at a time
     """
     import os
-    
+
     actor = get_actor_info()
     if not actor:
         raise Exception("Cannot generate outbox: actor.json not found")
-    
+
     base_url = actor['id'].rsplit('/actor', 1)[0]
     activities_dir = 'static/activities'
     outbox_path = 'static/outbox.json'
-    
+
     # Ensure static directory exists
     os.makedirs('static', exist_ok=True)
-    
-    # Count activities first
-    activity_count = 0
-    activity_files = []
-    if os.path.exists(activities_dir):
-        activity_files = [f for f in sorted(os.listdir(activities_dir), reverse=True) if f.endswith('.json')]
-        activity_count = len(activity_files)
-    
-    # Write outbox file directly
-    with open(outbox_path, 'w') as outbox_file:
-        # Write outbox header
-        outbox_file.write('{\n')
-        outbox_file.write('  "@context": "https://www.w3.org/ns/activitystreams",\n')
-        outbox_file.write('  "type": "OrderedCollection",\n')
-        outbox_file.write(f'  "id": "{base_url}/outbox",\n')
-        outbox_file.write(f'  "totalItems": {activity_count},\n')
-        outbox_file.write('  "orderedItems": [\n')
-        
-        # Write each activity reference
-        for i, filename in enumerate(activity_files):
-            filepath = os.path.join(activities_dir, filename)
-            try:
-                with open(filepath, 'r') as f:
-                    activity = json.load(f)
-                
-                # Create activity reference
-                activity_ref = {
-                    "type": activity["type"],
-                    "id": activity["id"],
-                    "actor": activity["actor"],
-                    "published": activity["published"],
-                    "object": activity["object"]["id"] if isinstance(activity["object"], dict) else activity["object"]
-                }
-                
-                # Write activity reference (with comma except for last item)
-                outbox_file.write('    ')
-                json.dump(activity_ref, outbox_file, separators=(',', ':'))
-                if i < len(activity_files) - 1:
-                    outbox_file.write(',')
-                outbox_file.write('\n')
-                
-            except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
-                print(f"Warning: Skipping malformed activity file: {filepath} - {e}")
-                continue
-        
-        # Close outbox
-        outbox_file.write('  ]\n')
-        outbox_file.write('}\n')
-    
-    print(f"✓ Regenerated outbox with {activity_count} activities")
+
+    # Use streaming template rendering
+    activity_count = templates.render_outbox_streaming(
+        outbox_id=f"{base_url}/outbox",
+        activities_dir=activities_dir,
+        output_path=outbox_path
+    )
+
+    print(f"✓ Regenerated outbox with {activity_count} activities (streaming)")

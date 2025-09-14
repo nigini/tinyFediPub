@@ -1,0 +1,11 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "OrderedCollection",
+  "id": "{{ outbox_id }}",
+  "totalItems": {{ total_items }},
+  "orderedItems": [
+    {% for item in activity_generator %}
+    {{ item | tojson }}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}

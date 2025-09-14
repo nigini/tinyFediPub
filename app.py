@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 import json
 import os
+from template_utils import templates
 
 app = Flask(__name__)
 
@@ -29,7 +30,8 @@ ACTOR_NAME = config['activitypub']['actor_name']
 ACTOR_SUMMARY = config['activitypub']['actor_summary']
 PUBLIC_KEY_PEM = load_key_file(config['security']['public_key_file'])
 PRIVATE_KEY_PEM = load_key_file(config['security']['private_key_file'])
-WEBSITE_URL = f'https://{DOMAIN}'
+PROTOCOL = config['server'].get('protocol', 'https')
+WEBSITE_URL = f'{PROTOCOL}://{DOMAIN}'
 
 NAMESPACE = config['activitypub']['namespace']
 CONTENT_TYPE_AP = 'application/activity+json'
@@ -41,31 +43,9 @@ def load_json_file(filename):
     with open(filepath, 'r') as f:
         return json.load(f)
 
-def generate_actor_config():
-    """Generate actor.json content from configuration"""
-    actor_template = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "Person",
-        "id": f"{WEBSITE_URL}/{NAMESPACE}/actor",
-        "preferredUsername": USERNAME,
-        "name": ACTOR_NAME,
-        "summary": ACTOR_SUMMARY,
-        "inbox": f"{WEBSITE_URL}/{NAMESPACE}/inbox",
-        "outbox": f"{WEBSITE_URL}/{NAMESPACE}/outbox",
-        "followers": f"{WEBSITE_URL}/{NAMESPACE}/followers",
-        "following": f"{WEBSITE_URL}/{NAMESPACE}/following",
-        "url": WEBSITE_URL,
-        "publicKey": {
-            "id": f"{WEBSITE_URL}/{NAMESPACE}/actor#main-key",
-            "owner": f"{WEBSITE_URL}/{NAMESPACE}/actor",
-            "publicKeyPem": PUBLIC_KEY_PEM
-        }
-    }
-    return actor_template
-
 def write_actor_config():
     """Write actor configuration to static/actor.json"""
-    actor_config = generate_actor_config()
+    actor_config = templates.render_actor(config, PUBLIC_KEY_PEM)
     filepath = os.path.join('static', 'actor.json')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, 'w') as f:
