@@ -1,0 +1,18 @@
+{
+  "server": {
+    "domain": "127.0.0.1:5000",
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug": true
+  },
+  "activitypub": {
+    "username": "blog",
+    "actor_name": "localhost's blog",
+    "actor_summary": "A personal blog with federated posts",
+    "namespace": "activitypub"
+  },
+  "security": {
+    "public_key_file": "keys/public_key.pem",
+    "private_key_file": "keys/private_key.pem"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Create",
+  "id": "https://127.0.0.1:5000/activitypub/activities/create-20250914-051547-test-post",
+  "actor": "https://127.0.0.1:5000/activitypub/actor",
+  "published": "2025-09-14T05:15:47Z",
+  "object": {
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "type": "Article",
+    "id": "https://127.0.0.1:5000/activitypub/posts/20250914-051547-test-post",
+    "url": "https://example.com/test-post",
+    "attributedTo": "https://127.0.0.1:5000/activitypub/actor",
+    "published": "2025-09-14T05:15:47Z",
+    "name": "Test Post",
+    "content": "This is a test of the new post creation workflow"
+  }
+}

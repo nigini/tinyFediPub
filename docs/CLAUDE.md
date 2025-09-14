@@ -4,56 +4,100 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a minimal ActivityPub server implementation using Flask. It serves static JSON files to provide basic ActivityPub federation capabilities for publishing blog posts to the fediverse.
+This is a minimal ActivityPub server implementation using Flask. It's designed for easy integration with personal websites and uses a file-based approach for maximum simplicity. The server can federate blog posts to the fediverse without complex infrastructure.
 
 ## Commands
 
 **Development:**
 ```bash
-# Install dependencies
+# Activate virtual environment and install dependencies
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# Run the server
-python3 app.py
+# Run the server (generates actor.json on startup)
+python app.py
+
+# Create new posts
+./new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post" --summary "Optional"
 ```
 
 **Testing:**
 ```bash
-# Test webfinger endpoint
-curl "http://localhost:5000/.well-known/webfinger?resource=acct:blog@nigini.me"
+# Run full test suite
+python -m pytest tests/ -v
 
-# Test ActivityPub endpoints (require proper headers)
+# Test specific endpoints
 curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/actor
 curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/outbox
-curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/posts/hello-world
-curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/activities/create-1
+curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/posts/<post-id>
 ```
 
 ## Architecture
 
+**Configuration:**
+- All settings externalized in `config.json` (server, ActivityPub, security)
+- Cryptographic keys stored in `keys/` directory (excluded from git)
+- Actor profile generated dynamically from config on server startup
+
 **URL Structure:**
-- All ActivityPub endpoints use the `/activitypub/` namespace (defined by `NAMESPACE` constant)
+- All ActivityPub endpoints use the `/activitypub/` namespace (configurable)
 - WebFinger discovery at `/.well-known/webfinger` (protocol requirement)
+- Designed to run behind reverse proxy: `proxy_pass http://localhost:5000/activitypub/`
 
 **Data Model:**
 - **Activities** (`/activitypub/activities/<id>`) - Actions that happened (e.g., Create, Update)
 - **Objects** (`/activitypub/posts/<id>`) - The content being acted upon (blog posts)
-- **Actor** (`/activitypub/actor`) - The blog identity/profile
-- **Outbox** (`/activitypub/outbox`) - Collection of all activities published
+- **Actor** (`/activitypub/actor`) - The blog identity/profile (generated from config)
+- **Outbox** (`/activitypub/outbox`) - Collection of all activities (dynamically generated)
 
-**Static Content:**
-All responses are served from static JSON files in the `static/` directory:
+**File-Based Architecture:**
+- `config.json` - All configuration (domain, actor details, key file paths)
+- `keys/` - Public/private key files (auto-generated with OpenSSL)
 - `static/webfinger.json` - WebFinger response
-- `static/actor.json` - Actor profile 
-- `static/outbox.json` - Activity collection (references individual activities)
-- `static/activities/` - Individual activity files
-- `static/posts/` - Individual post objects
+- `static/actor.json` - Actor profile (generated from config)
+- `static/posts/` - Individual post objects (created by CLI)
+- `static/activities/` - Individual activity files (created by CLI)
+- `static/outbox.json` - Generated dynamically from activities directory
 
-**Content Negotiation:**
-ActivityPub endpoints require `application/activity+json` or `application/ld+json` Accept headers. The server returns 406 for other content types.
+**Post Creation Workflow:**
+1. CLI tool (`new_post.py`) creates post JSON with timestamp+slug ID
+2. CLI creates corresponding Create activity wrapping the post
+3. CLI regenerates outbox by scanning activities directory (append-only)
+4. Server serves all files without restart needed (Flask auto-reload in debug mode)
 
-**Current Limitations:**
-- Single hardcoded actor (`acct:blog@nigini.me`)
-- No HTTP signature support (placeholder public key)
-- No inbox functionality
-- Static JSON files only (no database)
+**Key Features:**
+- **Memory efficient**: Outbox streams from files without loading all activities
+- **Self-healing**: Outbox can be rebuilt from activities directory at any time
+- **Simple deployment**: Just files, no database required
+- **Flexible URLs**: Post URLs can point anywhere (existing blog, external sites, etc.)
+- **Secure**: Private keys never committed, proper ActivityPub content negotiation
+
+## Test Coverage
+
+Comprehensive test suite in `tests/` covering:
+- Post ID generation (timestamp + optional slug)
+- Post/activity creation and file operations
+- Outbox regeneration from activities
+- CLI workflow integration
+- All Flask endpoints (webfinger, actor, outbox, posts, activities)
+- Content negotiation and error handling
+
+## Current Status
+
+✅ **Implemented:**
+- WebFinger discovery
+- Actor profile with dynamic generation
+- Outbox collection (dynamically generated)
+- Individual post and activity endpoints
+- CLI tool for post creation
+- Proper ActivityPub content types and headers
+- Comprehensive test suite
+- Secure key management
+
+⏳ **Missing (for full federation):**
+- Inbox endpoint (receiving activities from other servers)
+- HTTP signature verification (for secure federation)
+- Followers/following collections
+- Activity delivery to other servers
+
+The server is currently "read-only" from a federation perspective - others can discover and read your posts, but you can't receive interactions or follow others yet.

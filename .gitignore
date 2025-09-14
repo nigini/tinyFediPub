@@ -1,3 +1,7 @@
 .venv
 .*.un~
 __pycache__
+
+# Security keys - never commit these
+keys/
+*.pem

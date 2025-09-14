@@ -4,16 +4,34 @@ import os
 
 app = Flask(__name__)
 
-# Configuration
-DOMAIN = '127.0.0.1:5000'
-USERNAME = 'blog'
-ACCOUNT = f'acct:{USERNAME}@{DOMAIN}'
-ACTOR_NAME = "localhost's blog"
-ACTOR_SUMMARY = "A personal blog with federated posts"
-PUBLIC_KEY_PEM = "-----BEGIN PUBLIC KEY-----\n(your public key here)\n-----END PUBLIC KEY-----"
-WEBSITE_URL = f'http://{DOMAIN}'
+# Load configuration
+def load_config():
+    """Load configuration from config.json"""
+    with open('config.json', 'r') as f:
+        return json.load(f)
 
-NAMESPACE = 'activitypub'
+def load_key_file(filename):
+    """Load key from file"""
+    try:
+        with open(filename, 'r') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        print(f"Warning: Key file {filename} not found. Please generate keys first.")
+        return None
+
+config = load_config()
+
+# Configuration
+DOMAIN = config['server']['domain']
+USERNAME = config['activitypub']['username']
+ACCOUNT = f'acct:{USERNAME}@{DOMAIN}'
+ACTOR_NAME = config['activitypub']['actor_name']
+ACTOR_SUMMARY = config['activitypub']['actor_summary']
+PUBLIC_KEY_PEM = load_key_file(config['security']['public_key_file'])
+PRIVATE_KEY_PEM = load_key_file(config['security']['private_key_file'])
+WEBSITE_URL = f'https://{DOMAIN}'
+
+NAMESPACE = config['activitypub']['namespace']
 CONTENT_TYPE_AP = 'application/activity+json'
 CONTENT_TYPE_LD = 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
 
@@ -117,4 +135,6 @@ def activity(activity_id):
 if __name__ == '__main__':
     # Generate actor.json on startup
     write_actor_config()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=config['server']['debug'], 
+            host=config['server']['host'], 
+            port=config['server']['port'])
