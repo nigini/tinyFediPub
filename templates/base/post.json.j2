@@ -1,0 +1,11 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "{{ post_type }}",
+  "id": "{{ website_url }}/{{ namespace }}/posts/{{ post_id }}",
+  "url": "{{ post_url }}",
+  "attributedTo": "{{ website_url }}/{{ namespace }}/actor",
+  "published": "{{ published }}"{% if title %},
+  "name": "{{ title }}"{% endif %}{% if content %},
+  "content": "{{ content }}"{% endif %}{% if summary %},
+  "summary": "{{ summary }}"{% endif %}
+}

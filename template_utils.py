@@ -92,6 +92,34 @@ class ActivityPubTemplates:
 
         return self.render_json_template('objects/article.json.j2', **template_data)
 
+    def render_note(self, config, post_id, content, post_url, summary=None, published=None):
+        """
+        Render note template
+
+        Args:
+            config: Configuration dictionary
+            post_id: Post ID
+            content: Post content (Note doesn't typically have a title)
+            post_url: External URL for the post
+            summary: Optional post summary
+            published: Published timestamp
+
+        Returns:
+            dict: Note JSON object
+        """
+        protocol = config['server'].get('protocol', 'https')
+        template_data = {
+            'website_url': f"{protocol}://{config['server']['domain']}",
+            'namespace': config['activitypub']['namespace'],
+            'post_id': post_id,
+            'content': content,
+            'post_url': post_url,
+            'summary': summary,
+            'published': published
+        }
+
+        return self.render_json_template('objects/note.json.j2', **template_data)
+
     def render_create_activity(self, activity_id, actor_id, published, post_object):
         """
         Render Create activity template

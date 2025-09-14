@@ -1,10 +1,8 @@
 {
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "OrderedCollection",
-  "id": "https://127.0.0.1:5000/activitypub/outbox",
-  "totalItems": 2,
+  "id": "https://nigini.me/activitypub/outbox",
+  "totalItems": 0,
   "orderedItems": [
-    {"type":"Create","id":"https://127.0.0.1:5000/activitypub/activities/create-20250914-051547-test-post","actor":"https://127.0.0.1:5000/activitypub/actor","published":"2025-09-14T05:15:47Z","object":"https://127.0.0.1:5000/activitypub/posts/20250914-051547-test-post"},
-    {"type":"Create","id":"https://nigini.me/activitypub/activities/create-1","actor":"https://nigini.me/activitypub/actor","published":"2025-01-01T00:00:00Z","object":"https://nigini.me/activitypub/posts/hello-world"}
   ]
 }

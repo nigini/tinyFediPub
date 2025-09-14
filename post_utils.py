@@ -48,17 +48,18 @@ def generate_post_id(title=None):
     
     return timestamp
 
-def create_post(title, content, url, summary=None, post_id=None):
+def create_post(post_type, title, content, url, summary=None, post_id=None):
     """
     Create a post JSON object and save to file
-    
+
     Args:
-        title: Post title
-        content: Post content  
+        post_type: Type of post ('article' or 'note')
+        title: Post title (required for articles, optional for notes)
+        content: Post content
         url: Full URL where post can be read (e.g., blog post URL)
         summary: Optional summary
         post_id: Custom post ID, auto-generated if None
-    
+
     Returns:
         tuple: (post_object, post_id)
     """
@@ -73,16 +74,26 @@ def create_post(title, content, url, summary=None, post_id=None):
     # Generate published timestamp
     published = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    # Create post object using template
-    post = templates.render_article(
-        config=config,
-        post_id=post_id,
-        title=title,
-        content=content,
-        post_url=url,
-        summary=summary,
-        published=published
-    )
+    # Create post object using appropriate template
+    if post_type == 'article':
+        post = templates.render_article(
+            config=config,
+            post_id=post_id,
+            title=title,
+            content=content,
+            post_url=url,
+            summary=summary,
+            published=published
+        )
+    else:  # note (default)
+        post = templates.render_note(
+            config=config,
+            post_id=post_id,
+            content=content,
+            post_url=url,
+            summary=summary,
+            published=published
+        )
     
     # Save post file
     posts_dir = 'static/posts'

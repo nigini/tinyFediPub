@@ -96,7 +96,7 @@ class TestFlaskApp(unittest.TestCase):
         # Create a test post first
         from post_utils import create_post, create_activity, regenerate_outbox
         
-        post_obj, post_id = create_post("Test Post", "Test content", "https://example.com/test")
+        post_obj, post_id = create_post('article', "Test Post", "Test content", "https://example.com/test")
         activity_obj, activity_id = create_activity(post_obj, post_id)
         with patch('builtins.print'):  # Suppress output
             regenerate_outbox()
@@ -118,7 +118,7 @@ class TestFlaskApp(unittest.TestCase):
         from post_utils import create_post
         
         with patch('builtins.print'):  # Suppress output
-            post_obj, post_id = create_post("Test Post", "Test content", "https://example.com/test")
+            post_obj, post_id = create_post('article', "Test Post", "Test content", "https://example.com/test")
         
         response = self.client.get(f'/activitypub/posts/{post_id}', headers={'Accept': 'application/activity+json'})
         
@@ -134,7 +134,7 @@ class TestFlaskApp(unittest.TestCase):
         from post_utils import create_post, create_activity
         
         with patch('builtins.print'):  # Suppress output
-            post_obj, post_id = create_post("Test Post", "Test content", "https://example.com/test")
+            post_obj, post_id = create_post('article', "Test Post", "Test content", "https://example.com/test")
             activity_obj, activity_id = create_activity(post_obj, post_id)
         
         response = self.client.get(f'/activitypub/activities/{activity_id}', headers={'Accept': 'application/activity+json'})

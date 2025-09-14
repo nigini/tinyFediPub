@@ -74,7 +74,7 @@ class TestPostCreation(unittest.TestCase):
         url = "https://example.com/test"
         summary = "Test summary"
         
-        post_obj, post_id = create_post(title, content, url, summary)
+        post_obj, post_id = create_post('article', title, content, url, summary)
         
         # Check post object structure
         self.assertEqual(post_obj['@context'], "https://www.w3.org/ns/activitystreams")
@@ -96,11 +96,60 @@ class TestPostCreation(unittest.TestCase):
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
-    
+
+    def test_create_note(self):
+        """Test Note creation and file saving"""
+        content = "Just published a new blog post about ActivityPub!"
+        url = "https://example.com/blog/activitypub"
+        summary = "Blog post announcement"
+
+        post_obj, post_id = create_post('note', None, content, url, summary)
+
+        # Check post object structure
+        self.assertEqual(post_obj['@context'], "https://www.w3.org/ns/activitystreams")
+        self.assertEqual(post_obj['type'], "Note")
+        self.assertEqual(post_obj['content'], content)
+        self.assertEqual(post_obj['url'], url)
+        self.assertEqual(post_obj['summary'], summary)
+        self.assertEqual(post_obj['attributedTo'], "https://test.example.com/activitypub/actor")
+
+        # Note should not have a 'name' field (no title)
+        self.assertNotIn('name', post_obj)
+
+        # Check ID format
+        self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
+
+        # Check file was created
+        post_path = f'static/posts/{post_id}.json'
+        self.assertTrue(os.path.exists(post_path))
+
+        # Verify file contents
+        with open(post_path, 'r') as f:
+            saved_post = json.load(f)
+        self.assertEqual(saved_post, post_obj)
+
+    def test_note_vs_article_differences(self):
+        """Test differences between Note and Article types"""
+        # Create an Article (has title)
+        article_obj, article_id = create_post('article', "My Blog Post", "Full article content here...", "https://example.com/blog/post")
+
+        # Create a Note (no title, short content)
+        note_obj, note_id = create_post('note', None, "Just shared something interesting! Check it out:", "https://example.com/shared-link")
+
+        # Article should have name (title)
+        self.assertEqual(article_obj['type'], "Article")
+        self.assertEqual(article_obj['name'], "My Blog Post")
+        self.assertEqual(article_obj['content'], "Full article content here...")
+
+        # Note should NOT have name (no title), per ActivityStreams spec
+        self.assertEqual(note_obj['type'], "Note")
+        self.assertNotIn('name', note_obj)  # Notes typically don't have titles
+        self.assertEqual(note_obj['content'], "Just shared something interesting! Check it out:")
+
     def test_create_activity(self):
         """Test activity creation and file saving"""
         # First create a post
-        post_obj, post_id = create_post("Test", "Content", "https://example.com/test")
+        post_obj, post_id = create_post('article', "Test", "Content", "https://example.com/test")
         
         # Then create activity
         activity_obj, activity_id = create_activity(post_obj, post_id)
@@ -130,7 +179,7 @@ class TestPostCreation(unittest.TestCase):
         # Create a couple of posts and activities
         posts_and_ids = []
         for i in range(2):
-            post_obj, post_id = create_post(f"Post {i}", f"Content {i}", f"https://example.com/post{i}")
+            post_obj, post_id = create_post('article', f"Post {i}", f"Content {i}", f"https://example.com/post{i}")
             activity_obj, activity_id = create_activity(post_obj, post_id)
             posts_and_ids.append((post_obj, post_id, activity_obj, activity_id))
         
@@ -178,7 +227,7 @@ class TestPostCreation(unittest.TestCase):
     def test_regenerate_outbox_with_malformed_activities(self):
         """Test outbox generation skips malformed activity files gracefully"""
         # Create a valid activity first
-        post_obj, post_id = create_post("Good Post", "Valid content", "https://example.com/good")
+        post_obj, post_id = create_post('article', "Good Post", "Valid content", "https://example.com/good")
         activity_obj, activity_id = create_activity(post_obj, post_id)
 
         # Verify we have exactly one valid activity file at this point
@@ -284,7 +333,7 @@ class TestCLIIntegration(unittest.TestCase):
         url = "https://myblog.com/cli-test"
         
         # Run the workflow
-        post_obj, post_id = create_post(title, content, url)
+        post_obj, post_id = create_post('article', title, content, url)
         activity_obj, activity_id = create_activity(post_obj, post_id)
         regenerate_outbox()
         
@@ -297,6 +346,40 @@ class TestCLIIntegration(unittest.TestCase):
         with open('static/outbox.json', 'r') as f:
             outbox = json.load(f)
         
+        self.assertEqual(outbox['totalItems'], 1)
+        self.assertEqual(outbox['orderedItems'][0]['object'], f"https://cli-test.example.com/activitypub/posts/{post_id}")
+
+    def test_cli_note_workflow(self):
+        """Test the complete CLI workflow for Note posts"""
+        # Import and run the CLI functions
+        sys.path.insert(0, self.original_cwd)
+        from post_utils import create_post, create_activity, regenerate_outbox
+
+        # Simulate CLI command for Note (no title required)
+        content = "Just published a new blog post about ActivityPub federation!"
+        url = "https://myblog.com/activitypub-post"
+
+        # Run the workflow with Note type
+        post_obj, post_id = create_post('note', None, content, url)
+        activity_obj, activity_id = create_activity(post_obj, post_id)
+        regenerate_outbox()
+
+        # Verify all files were created
+        self.assertTrue(os.path.exists(f'static/posts/{post_id}.json'))
+        self.assertTrue(os.path.exists(f'static/activities/{activity_id}.json'))
+        self.assertTrue(os.path.exists('static/outbox.json'))
+
+        # Verify post is a Note type
+        with open(f'static/posts/{post_id}.json', 'r') as f:
+            post = json.load(f)
+        self.assertEqual(post['type'], 'Note')
+        self.assertEqual(post['content'], content)
+        self.assertNotIn('name', post)  # No title for Note
+
+        # Verify outbox contains the new post
+        with open('static/outbox.json', 'r') as f:
+            outbox = json.load(f)
+
         self.assertEqual(outbox['totalItems'], 1)
         self.assertEqual(outbox['orderedItems'][0]['object'], f"https://cli-test.example.com/activitypub/posts/{post_id}")
 
