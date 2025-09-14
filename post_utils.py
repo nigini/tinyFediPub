@@ -9,8 +9,19 @@ from template_utils import templates
 
 def load_config():
     """Load configuration from config.json"""
-    with open('config.json', 'r') as f:
-        return json.load(f)
+    try:
+        with open('config.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("❌ Error: config.json not found!")
+        print("Please copy the example configuration file and customize it:")
+        print("  cp config.json.example config.json")
+        print("Then edit config.json with your domain and settings.")
+        raise SystemExit(1)
+    except json.JSONDecodeError as e:
+        print(f"❌ Error: config.json is not valid JSON: {e}")
+        print("Please check the file format and try again.")
+        raise SystemExit(1)
 
 def slugify(text):
     """Convert text to URL-safe slug"""

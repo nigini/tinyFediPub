@@ -10,9 +10,15 @@ This is a minimal ActivityPub server implementation using Flask. It's designed f
 
 **Development:**
 ```bash
-# Activate virtual environment and install dependencies
+# IMPORTANT: Always activate virtual environment first
 source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Copy and configure the config file
+cp config.json.example config.json
+# Edit config.json with your domain and settings
 
 # Run the server (generates actor.json on startup)
 python app.py
@@ -23,6 +29,9 @@ python app.py
 
 **Testing:**
 ```bash
+# IMPORTANT: Always activate virtual environment first
+source .venv/bin/activate
+
 # Run full test suite
 python -m pytest tests/ -v
 
@@ -36,6 +45,7 @@ curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/po
 
 **Configuration:**
 - All settings externalized in `config.json` (server, ActivityPub, security)
+- Users must copy `config.json.example` to `config.json` and customize it
 - Cryptographic keys stored in `keys/` directory (excluded from git)
 - Actor profile generated dynamically from config on server startup
 

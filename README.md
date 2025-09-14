@@ -27,6 +27,12 @@ openssl rsa -in keys/private_key.pem -pubout -out keys/public_key.pem
 
 ### 2. Configuration
 
+Copy the example configuration file and customize it for your setup:
+
+```bash
+cp config.json.example config.json
+```
+
 All settings are externalized in `config.json`:
 
 ```json

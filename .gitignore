@@ -5,3 +5,6 @@ __pycache__
 # Security keys - never commit these
 keys/
 *.pem
+
+# User configuration - use config.json.example as template
+config.json
