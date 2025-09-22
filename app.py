@@ -63,6 +63,18 @@ def write_actor_config():
         json.dump(actor_config, f, indent=2)
     print(f"Generated actor.json with domain: {DOMAIN}, username: {USERNAME}")
 
+def require_activitypub_accept(f):
+    """Decorator to validate Accept header for ActivityPub content negotiation"""
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        accept = request.headers.get('Accept', '')
+        if CONTENT_TYPE_AP not in accept and CONTENT_TYPE_LD not in accept:
+            return jsonify({'error': 'Not acceptable'}), 406
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/.well-known/webfinger')
 def webfinger():
     """WebFinger endpoint for actor discovery"""
@@ -73,35 +85,25 @@ def webfinger():
     return jsonify(load_json_file('webfinger.json'))
 
 @app.route(f'/{NAMESPACE}/actor')
+@require_activitypub_accept
 def actor():
     """Actor profile endpoint"""
-    # Content negotiation for ActivityPub
-    accept = request.headers.get('Accept', '')
-    if CONTENT_TYPE_AP not in accept and CONTENT_TYPE_LD not in accept:
-        return jsonify({'error': 'Not acceptable'}), 406
-    
     response = jsonify(load_json_file('actor.json'))
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
 @app.route(f'/{NAMESPACE}/outbox')
+@require_activitypub_accept
 def outbox():
     """Outbox endpoint - collection of activities"""
-    accept = request.headers.get('Accept', '')
-    if CONTENT_TYPE_AP not in accept and CONTENT_TYPE_LD not in accept:
-        return jsonify({'error': 'Not acceptable'}), 406
-    
     response = jsonify(load_json_file('outbox.json'))
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
 @app.route(f'/{NAMESPACE}/posts/<post_id>')
+@require_activitypub_accept
 def post(post_id):
     """Individual post objects"""
-    accept = request.headers.get('Accept', '')
-    if CONTENT_TYPE_AP not in accept and CONTENT_TYPE_LD not in accept:
-        return jsonify({'error': 'Not acceptable'}), 406
-    
     try:
         response = jsonify(load_json_file(f'posts/{post_id}.json'))
         response.headers['Content-Type'] = CONTENT_TYPE_AP
@@ -110,12 +112,9 @@ def post(post_id):
         return jsonify({'error': 'Post not found'}), 404
 
 @app.route(f'/{NAMESPACE}/activities/<activity_id>')
+@require_activitypub_accept
 def activity(activity_id):
     """Individual activity objects"""
-    accept = request.headers.get('Accept', '')
-    if CONTENT_TYPE_AP not in accept and CONTENT_TYPE_LD not in accept:
-        return jsonify({'error': 'Not acceptable'}), 406
-
     try:
         response = jsonify(load_json_file(f'activities/{activity_id}.json'))
         response.headers['Content-Type'] = CONTENT_TYPE_AP
@@ -146,6 +145,33 @@ def inbox():
     except Exception as e:
         print(f"Inbox error: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route(f'/{NAMESPACE}/followers')
+@require_activitypub_accept
+def followers():
+    """Followers collection endpoint"""
+    ensure_followers_file_exists()
+
+    response = jsonify(load_json_file('followers.json'))
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
+def ensure_followers_file_exists():
+    """Create followers.json if it doesn't exist using template"""
+    import os
+    from post_utils import get_actor_info
+
+    filepath = 'static/followers.json'
+    if not os.path.exists(filepath):
+        actor = get_actor_info()
+        if actor:
+            base_url = actor['id'].rsplit('/actor', 1)[0]
+            followers_collection = templates.render_followers_collection(
+                followers_id=f"{base_url}/followers"
+            )
+            os.makedirs('static', exist_ok=True)
+            with open(filepath, 'w') as f:
+                json.dump(followers_collection, f, indent=2)
 
 def save_inbox_activity(activity):
     """Save incoming activity to inbox folder"""

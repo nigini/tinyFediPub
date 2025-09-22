@@ -47,7 +47,8 @@ All settings are externalized in `config.json`:
     "username": "blog",
     "actor_name": "Your Blog Name",
     "actor_summary": "Description of your blog",
-    "namespace": "activitypub"
+    "namespace": "activitypub",
+    "auto_accept_follow_requests": true
   },
   "security": {
     "public_key_file": "keys/public_key.pem",
@@ -113,7 +114,8 @@ templates/
 │   ├── create.json.j2     # Create activities
 │   └── update.json.j2     # Update activities (future)
 └── collections/      # ActivityStreams Collections
-    └── outbox.json.j2     # Outbox collections (future)
+    ├── outbox.json.j2     # Outbox collections
+    └── followers.json.j2  # Followers collections
 ```
 
 **Design Philosophy:**
@@ -122,4 +124,83 @@ templates/
 - **Spec-compliant** - Templates ensure proper ActivityPub/ActivityStreams structure
 - **Configurable** - All values injected from `config.json` and runtime data
 
-Current implementation supports `Article` objects and `Create` activities, with template structure ready for future ActivityStreams types.
+Current implementation supports `Article`/`Note` objects, `Create` activities, and `Collection` types (outbox, followers), with template structure ready for future ActivityStreams types.
+
+## Federation Features
+
+**Implemented:**
+- **WebFinger Discovery** - `.well-known/webfinger` for actor discovery
+- **Actor Profile** - Dynamic actor generation from config
+- **Outbox Collection** - Serves all published activities
+- **Individual Endpoints** - Posts and activities accessible via direct URLs
+- **Inbox Endpoint** - Receives activities from other federated servers
+- **Followers Collection** - Manages and serves follower list
+- **Content Negotiation** - Proper ActivityPub headers and validation
+
+**File Structure:**
+```
+static/
+├── actor.json           # Your actor profile (auto-generated)
+├── outbox.json          # Collection of your activities (auto-generated)
+├── followers.json       # Collection of followers (auto-generated)
+├── posts/               # Individual post objects
+│   └── 20250921-143022-my-post.json
+├── activities/          # Individual activity objects
+│   └── create-20250921-143022.json
+└── inbox/               # Received activities from other servers
+    ├── TO_DO.json       # Queue of activities needing processing
+    ├── follow-*.json    # Follow requests received
+    └── undo-*.json      # Unfollow activities received
+```
+
+**Current Capabilities:**
+- Others can discover your actor via WebFinger
+- Others can follow your actor and read your posts
+- You receive and store all incoming activities
+- Automatic follower management (configurable)
+
+**Configuration Options:**
+- `auto_accept_follow_requests` - Automatically accept follow requests (default: true)
+- Set to `false` for manual approval of followers
+
+## What's Next
+
+**In Development:**
+- Follow request processing (add to followers, generate Accept activities)
+- Activity delivery to followers (send your posts to follower inboxes)
+- HTTP signature verification for secure federation
+
+**Future Enhancements:**
+- Manual follow approval workflow
+- Support for Like, Announce, and other activity types
+- Mention and reply handling
+- Custom endpoints for follow request management
+
+## To Consider
+
+### Activity Processing Strategy
+
+The inbox receives various ActivityPub activities that require different processing approaches:
+
+**Activities requiring action:**
+- **Follow** - Add to followers collection, generate Accept/Reject response
+- **Undo(Follow)** - Remove from followers collection
+- **Like/Announce** - Optional analytics tracking
+- **Create/Update/Delete** - Handle mentions or replies to your posts
+
+**Activities that are informational:**
+- **Accept/Reject** - Responses to your outgoing Follow requests (log only)
+
+**Processing Queue:**
+Current implementation uses `static/inbox/TO_DO.json` to track activities needing processing, allowing for:
+- Automatic processing (with `auto_accept_follow_requests: true` config)
+- Manual approval workflows (scan unprocessed activities)
+- Selective processing by activity type
+
+**Follow Requests - Special Case:**
+Following relationships are fundamental to ActivityPub federation. The current approach:
+- All Follow activities saved to inbox for audit trail
+- Auto-accept mode: immediately add to followers and generate Accept activity
+- Manual approval mode: requires processing pending requests
+
+**Note:** While ActivityPub spec defines standard collections (`/followers`, `/following`), many servers implement custom APIs for follow request management (e.g., Mastodon's `/api/v1/follow_requests`, Pleroma's similar endpoints). Future enhancements could add a `/pending-followers` endpoint for manual approval workflows.

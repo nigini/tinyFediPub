@@ -1,0 +1,11 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Collection",
+  "id": "{{ followers_id }}",
+  "totalItems": {{ total_items }},
+  "items": [
+    {%- for follower in followers %}
+    "{{ follower }}"{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}

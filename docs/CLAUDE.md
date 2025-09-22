@@ -107,11 +107,45 @@ Comprehensive test suite in `tests/` covering:
 - Comprehensive test suite with error handling tests
 - Secure key management
 - Extensible template system for future ActivityPub types
+- **NEW**: Inbox endpoint with activity saving to `static/inbox/`
+- **NEW**: Followers collection endpoint with template-based generation
+- **NEW**: Utility functions for activity ID generation and actor URL parsing
+- **NEW**: ActivityPub Accept header validation via decorator pattern
 
-⏳ **Missing (for full federation):**
-- Inbox endpoint (receiving activities from other servers)
-- HTTP signature verification (for secure federation)
-- Followers/following collections
-- Activity delivery to other servers
+## Recent Progress (2025-09-21)
 
-The server is currently "read-only" from a federation perspective - others can discover and read your posts, but you can't receive interactions or follow others yet.
+**Inbox Implementation:**
+- All incoming activities saved to `static/inbox/` with structured filenames
+- Filename format: `{type}-{timestamp}-{domain}.json` (e.g., `follow-20250921-143022-mastodon-social.json`)
+- Comprehensive test coverage for activity saving and HTTP endpoint validation
+- Content-type validation for ActivityPub requests
+
+**Followers Collection:**
+- `/followers` endpoint with empty collection auto-generation
+- Template-based JSON generation using `templates/collections/followers.json.j2`
+- File creation on-demand when endpoint is accessed
+- Test coverage for endpoint behavior and file creation
+
+**Code Quality Improvements:**
+- Refactored Accept header validation into reusable `@require_activitypub_accept` decorator
+- Created utility functions: `generate_activity_id()` and `parse_actor_url()`
+- Organized tests into separate files: `test_inbox.py`, `test_followers.py`
+- Added configuration option: `auto_accept_follow_requests: true` (default)
+
+**Processing Queue Design:**
+- Designed `static/inbox/TO_DO.json` structure for tracking pending activities
+- Format: `{"filename": "timestamp"}` for chronological processing
+- Documented activity processing strategy in README.md "To Consider" section
+
+⏳ **Next Steps (In Progress):**
+- Implement Follow activity processing with TO_DO.json queue
+- Generate Accept activities for Follow requests (auto-accept mode)
+- Activity delivery to followers (outgoing activities)
+- HTTP signature verification for secure federation
+
+⏳ **Future (Manual Approval):**
+- Manual follow approval workflow when `auto_accept_follow_requests: false`
+- Possible `/pending-followers` endpoint for management
+- CLI tools for processing pending requests
+
+The server now accepts incoming activities and manages followers, moving from "read-only" toward full federation capability.

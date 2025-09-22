@@ -10,7 +10,8 @@
     "username": "blog",
     "actor_name": "localhost's blog",
     "actor_summary": "A personal blog with federated posts",
-    "namespace": "activitypub"
+    "namespace": "activitypub",
+    "auto_accept_follow_requests": true
   },
   "security": {
     "public_key_file": "keys/public_key.pem",
