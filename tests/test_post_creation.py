@@ -10,8 +10,8 @@ import json
 import sys
 from unittest.mock import patch
 from post_utils import (
-    generate_post_id, create_post, create_activity, 
-    regenerate_outbox, get_actor_info
+    generate_post_id, create_post, create_activity,
+    regenerate_outbox, get_actor_info, generate_activity_id
 )
 
 class TestPostCreation(unittest.TestCase):
@@ -382,6 +382,71 @@ class TestCLIIntegration(unittest.TestCase):
 
         self.assertEqual(outbox['totalItems'], 1)
         self.assertEqual(outbox['orderedItems'][0]['object'], f"https://cli-test.example.com/activitypub/posts/{post_id}")
+
+
+class TestUtilityFunctions(unittest.TestCase):
+    """Test new utility functions for activity management"""
+
+    def test_generate_activity_id(self):
+        """Test activity ID generation with timestamp"""
+        from post_utils import generate_activity_id
+
+        # Test different activity types
+        create_id = generate_activity_id('create')
+        accept_id = generate_activity_id('Accept')
+        follow_id = generate_activity_id('FOLLOW')
+
+        # Should include lowercased type and timestamp
+        self.assertTrue(create_id.startswith('create-'))
+        self.assertTrue(accept_id.startswith('accept-'))
+        self.assertTrue(follow_id.startswith('follow-'))
+
+        # Should include timestamp format YYYYMMDD-HHMMSS
+        import re
+        timestamp_pattern = r'-\d{8}-\d{6}$'
+        self.assertRegex(create_id, timestamp_pattern)
+        self.assertRegex(accept_id, timestamp_pattern)
+        self.assertRegex(follow_id, timestamp_pattern)
+
+    def test_parse_actor_url(self):
+        """Test actor URL parsing for domain and username extraction"""
+        from post_utils import parse_actor_url
+
+        # Test common ActivityPub URL patterns
+        test_cases = [
+            ('https://mastodon.social/users/alice', ('mastodon.social', 'alice')),
+            ('https://pixelfed.social/@bob', ('pixelfed.social', 'bob')),
+            ('https://lemmy.world/u/charlie', ('lemmy.world', 'charlie')),
+            ('https://example.com/users/dave/profile', ('example.com', 'dave')),
+            ('https://micro.blog/users/eve', ('micro.blog', 'eve')),
+            ('not-a-url', ('unknown', None)),
+            ('', ('unknown', None)),
+            (None, ('unknown', None)),
+        ]
+
+        for actor_url, expected in test_cases:
+            with self.subTest(actor_url=actor_url):
+                domain, username = parse_actor_url(actor_url)
+                self.assertEqual((domain, username), expected)
+
+    def test_parse_actor_url_edge_cases(self):
+        """Test edge cases for actor URL parsing"""
+        from post_utils import parse_actor_url
+
+        # URLs without recognizable username patterns
+        domain, username = parse_actor_url('https://example.com/some/other/path')
+        self.assertEqual(domain, 'example.com')
+        self.assertIsNone(username)
+
+        # URL with just domain
+        domain, username = parse_actor_url('https://example.com/')
+        self.assertEqual(domain, 'example.com')
+        self.assertIsNone(username)
+
+        # Malformed URL that might cause exceptions
+        domain, username = parse_actor_url('https://')
+        self.assertEqual(domain, 'unknown')
+        self.assertIsNone(username)
 
 
 if __name__ == '__main__':

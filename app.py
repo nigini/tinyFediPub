@@ -115,13 +115,60 @@ def activity(activity_id):
     accept = request.headers.get('Accept', '')
     if CONTENT_TYPE_AP not in accept and CONTENT_TYPE_LD not in accept:
         return jsonify({'error': 'Not acceptable'}), 406
-    
+
     try:
         response = jsonify(load_json_file(f'activities/{activity_id}.json'))
         response.headers['Content-Type'] = CONTENT_TYPE_AP
         return response
     except FileNotFoundError:
         return jsonify({'error': 'Activity not found'}), 404
+
+@app.route(f'/{NAMESPACE}/inbox', methods=['POST'])
+def inbox():
+    """Inbox endpoint - receive activities from other servers"""
+    content_type = request.headers.get('Content-Type', '')
+
+    # Basic content type validation
+    if CONTENT_TYPE_AP not in content_type and CONTENT_TYPE_LD not in content_type:
+        return jsonify({'error': 'Invalid content type'}), 400
+
+    try:
+        activity = request.get_json()
+        if not activity or 'type' not in activity:
+            return jsonify({'error': 'Invalid activity'}), 400
+
+        # Save incoming activity to inbox folder
+        save_inbox_activity(activity)
+
+        print(f"Received {activity['type']} activity from {activity.get('actor', 'unknown')}")
+        return '', 202  # Accepted
+
+    except Exception as e:
+        print(f"Inbox error: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+def save_inbox_activity(activity):
+    """Save incoming activity to inbox folder"""
+    from post_utils import generate_activity_id, parse_actor_url
+
+    # Generate filename using utility functions
+    activity_type = activity['type']
+    actor_url = activity.get('actor', '')
+    domain, username = parse_actor_url(actor_url)
+
+    # Create filename: activity-type-timestamp-domain.json
+    base_id = generate_activity_id(activity_type)
+    filename = f"{base_id}-{domain.replace('.', '-')}.json"
+
+    # Save to inbox folder
+    inbox_dir = 'static/inbox'
+    os.makedirs(inbox_dir, exist_ok=True)
+    filepath = os.path.join(inbox_dir, filename)
+
+    with open(filepath, 'w') as f:
+        json.dump(activity, f, indent=2)
+
+    print(f"✓ Saved inbox activity: {filepath}")
 
 if __name__ == '__main__':
     # Generate actor.json on startup

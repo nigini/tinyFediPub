@@ -32,21 +32,73 @@ def slugify(text):
 def generate_post_id(title=None):
     """
     Generate post ID with timestamp + optional title suffix
-    
+
     Args:
         title: Optional title to create suffix from
-        
+
     Returns:
         str: Post ID like '20250913-143022' or '20250913-143022-my-post'
     """
     timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-    
+
     if title:
         suffix = slugify(title)
         if suffix:
             return f"{timestamp}-{suffix}"
-    
+
     return timestamp
+
+def generate_activity_id(activity_type):
+    """
+    Generate activity ID with timestamp + type
+
+    Args:
+        activity_type: Activity type (e.g., 'create', 'accept', 'follow')
+
+    Returns:
+        str: Activity ID like 'create-20250921-143022' or 'accept-20250921-143022'
+    """
+    timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+    return f"{activity_type.lower()}-{timestamp}"
+
+def parse_actor_url(actor_url):
+    """
+    Extract useful information from actor URL
+
+    Args:
+        actor_url: Actor URL (e.g., 'https://mastodon.social/users/alice')
+
+    Returns:
+        tuple: (domain, username) where username may be None if not extractable
+    """
+    if not actor_url or not isinstance(actor_url, str):
+        return ('unknown', None)
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(actor_url)
+        domain = parsed.netloc or 'unknown'
+
+        # Try to extract username from common ActivityPub URL patterns
+        username = None
+        path = parsed.path.strip('/')
+        if path:
+            # Common patterns: /users/alice, /@alice, /u/alice
+            if path.startswith('users/'):
+                parts = path.split('/')
+                if len(parts) >= 2:
+                    username = parts[1]  # Take the part right after 'users'
+            elif path.startswith('@'):
+                username = path[1:]
+            elif path.startswith('u/'):
+                parts = path.split('/')
+                if len(parts) >= 2:
+                    username = parts[1]  # Take the part right after 'u'
+
+        return (domain, username)
+
+    except Exception:
+        return ('unknown', None)
 
 def create_post(post_type, title, content, url, summary=None, post_id=None):
     """
@@ -139,7 +191,7 @@ def create_activity(post_object, post_id):
         raise Exception("Cannot create activity: actor.json not found. Please run the server first.")
 
     # Generate activity ID
-    activity_id = f"create-{post_id}"
+    activity_id = generate_activity_id('create')
 
     # Extract domain/namespace from actor ID
     actor_id = actor['id']
