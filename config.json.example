@@ -16,5 +16,13 @@
   "security": {
     "public_key_file": "keys/public_key.pem",
     "private_key_file": "keys/private_key.pem"
+  },
+  "directories": {
+    "inbox": "static/inbox",
+    "inbox_queue": "static/inbox/queue",
+    "outbox": "static",
+    "posts": "static/posts",
+    "activities": "static/activities",
+    "followers": "static"
   }
 }

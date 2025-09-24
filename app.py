@@ -137,7 +137,10 @@ def inbox():
             return jsonify({'error': 'Invalid activity'}), 400
 
         # Save incoming activity to inbox folder
-        save_inbox_activity(activity)
+        filename = save_inbox_activity(activity)
+
+        # Queue activity for processing by creating symlink
+        queue_activity_for_processing(filename)
 
         print(f"Received {activity['type']} activity from {activity.get('actor', 'unknown')}")
         return '', 202  # Accepted
@@ -187,7 +190,7 @@ def save_inbox_activity(activity):
     filename = f"{base_id}-{domain.replace('.', '-')}.json"
 
     # Save to inbox folder
-    inbox_dir = 'static/inbox'
+    inbox_dir = config['directories']['inbox']
     os.makedirs(inbox_dir, exist_ok=True)
     filepath = os.path.join(inbox_dir, filename)
 
@@ -195,6 +198,22 @@ def save_inbox_activity(activity):
         json.dump(activity, f, indent=2)
 
     print(f"✓ Saved inbox activity: {filepath}")
+    return filename
+
+def queue_activity_for_processing(filename):
+    """Queue activity for processing by creating symlink in queue directory"""
+    queue_dir = config['directories']['inbox_queue']
+    inbox_dir = config['directories']['inbox']
+
+    os.makedirs(queue_dir, exist_ok=True)
+
+    source_path = os.path.join(inbox_dir, filename)
+    queue_path = os.path.join(queue_dir, filename)
+
+    # Create symlink if it doesn't exist
+    if not os.path.exists(queue_path):
+        os.symlink(os.path.abspath(source_path), queue_path)
+        print(f"✓ Queued activity for processing: {filename}")
 
 if __name__ == '__main__':
     # Generate actor.json on startup

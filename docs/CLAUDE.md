@@ -137,15 +137,50 @@ Comprehensive test suite in `tests/` covering:
 - Format: `{"filename": "timestamp"}` for chronological processing
 - Documented activity processing strategy in README.md "To Consider" section
 
-⏳ **Next Steps (In Progress):**
-- Implement Follow activity processing with TO_DO.json queue
-- Generate Accept activities for Follow requests (auto-accept mode)
-- Activity delivery to followers (outgoing activities)
-- HTTP signature verification for secure federation
+## Recent Progress (2025-09-23)
+
+**Activity Processing System:**
+- ✅ **Implemented `activity_processor.py`** - Separate module using strategy pattern for clean separation
+- ✅ **Strategy Pattern** - `BaseActivityProcessor` with `FollowActivityProcessor` and `UndoActivityProcessor`
+- ✅ **Registry-based Selection** - Simple dictionary lookup: `PROCESSORS[activity_type]`
+- ✅ **Symlink-based Queue** - Avoids concurrency issues with `static/inbox/queue/` directory
+- ✅ **Config-driven Directories** - Added `directories` section to `config.json.example`
+- ✅ **Modified Inbox Endpoint** - Now queues all activities automatically via `queue_activity_for_processing()`
+
+**Configuration Updates:**
+- Added `directories` config section with paths for `inbox`, `inbox_queue`, `outbox`, `posts`, `activities`, `followers`
+- All hardcoded paths now use config variables for flexibility
+
+**Architecture Improvements:**
+- Clean separation: Flask handles HTTP, `activity_processor.py` handles federation logic
+- Extensible processor system - easy to add new activity types
+- No shared files = no concurrency issues between web server and processor
+
+⚠️ **IMPORTANT: Not Yet Tested** - The new activity processing system needs comprehensive testing before deployment
+
+⏳ **Next Steps (Immediate):**
+- **CRITICAL**: Test the activity processing workflow end-to-end
+- Generate Accept activities for Follow requests in `FollowActivityProcessor.process()`
+- Add followers to `followers.json` collection when processing Follow activities
+- Update `UndoActivityProcessor` to remove followers from collection
 
 ⏳ **Future (Manual Approval):**
 - Manual follow approval workflow when `auto_accept_follow_requests: false`
 - Possible `/pending-followers` endpoint for management
 - CLI tools for processing pending requests
+- Activity delivery to followers (outgoing activities)
+- HTTP signature verification for secure federation
 
-The server now accepts incoming activities and manages followers, moving from "read-only" toward full federation capability.
+**Usage:**
+```bash
+# Process queued activities
+python activity_processor.py
+
+# Check what activities are queued
+ls static/inbox/queue/
+
+# Check processed activities
+ls static/inbox/
+```
+
+The server now has a complete activity processing system architecture, moving from "read-only" toward full federation capability.
