@@ -3,55 +3,30 @@
 Unit tests for ActivityPub post creation workflow
 """
 import unittest
-import tempfile
-import shutil
 import os
 import json
 import sys
+import tempfile
+import time
 from unittest.mock import patch
+sys.path.insert(0, '.')
+from tests.test_config import TestConfigMixin
 from post_utils import (
     generate_post_id, create_post, create_activity,
     regenerate_outbox, get_actor_info, generate_activity_id
 )
 
-class TestPostCreation(unittest.TestCase):
-    
+class TestPostCreation(unittest.TestCase, TestConfigMixin):
+
     def setUp(self):
-        """Set up temporary directory for test files"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        
-        # Create test config
-        self.test_config = {
-            "server": {"domain": "test.example.com"},
-            "activitypub": {"namespace": "activitypub"},
-            "security": {
-                "public_key_file": "test_public.pem",
-                "private_key_file": "test_private.pem"
-            }
-        }
-        
-        with open('config.json', 'w') as f:
-            json.dump(self.test_config, f)
-        
-        # Create test actor.json
-        os.makedirs('static', exist_ok=True)
-        self.test_actor = {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Person",
-            "id": "https://test.example.com/activitypub/actor",
-            "preferredUsername": "testuser",
-            "name": "Test User"
-        }
-        
-        with open('static/actor.json', 'w') as f:
-            json.dump(self.test_actor, f)
-    
+        """Set up test environment"""
+        self.setup_test_environment("post_creation")
+        # Create actor file for these tests
+        self.create_test_actor()
+
     def tearDown(self):
-        """Clean up temporary directory"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        """Clean up test environment"""
+        self.teardown_test_environment()
     
     def test_generate_post_id_with_title(self):
         """Test post ID generation with title"""
@@ -89,10 +64,10 @@ class TestPostCreation(unittest.TestCase):
         self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
         
         # Check file was created
-        post_path = f'static/posts/{post_id}.json'
-        self.assertTrue(os.path.exists(post_path))
-        
+        self.assert_file_exists('posts', f'{post_id}.json')
+
         # Verify file contents
+        post_path = self.get_test_file_path('posts', f'{post_id}.json')
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
@@ -120,10 +95,10 @@ class TestPostCreation(unittest.TestCase):
         self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
 
         # Check file was created
-        post_path = f'static/posts/{post_id}.json'
-        self.assertTrue(os.path.exists(post_path))
+        self.assert_file_exists('posts', f'{post_id}.json')
 
         # Verify file contents
+        post_path = self.get_test_file_path('posts', f'{post_id}.json')
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
@@ -161,36 +136,39 @@ class TestPostCreation(unittest.TestCase):
         self.assertEqual(activity_obj['object'], post_obj)
         self.assertEqual(activity_obj['published'], post_obj['published'])
         
-        # Check activity ID
-        expected_activity_id = f"create-{post_id}"
-        self.assertEqual(activity_id, expected_activity_id)
+        # Check activity ID format (should start with 'create-' followed by timestamp)
+        self.assertTrue(activity_id.startswith('create-'))
+        self.assertRegex(activity_id, r'^create-\d{8}-\d{6}$')
         
         # Check file was created
-        activity_path = f'static/activities/{activity_id}.json'
-        self.assertTrue(os.path.exists(activity_path))
-        
+        self.assert_file_exists('activities', f'{activity_id}.json')
+
         # Verify file contents
+        activity_path = self.get_test_file_path('activities', f'{activity_id}.json')
         with open(activity_path, 'r') as f:
             saved_activity = json.load(f)
         self.assertEqual(saved_activity, activity_obj)
     
     def test_regenerate_outbox(self):
         """Test outbox regeneration from activities"""
-        # Create a couple of posts and activities
+        # Create a couple of posts and activities with sufficient time delay
         posts_and_ids = []
         for i in range(2):
             post_obj, post_id = create_post('article', f"Post {i}", f"Content {i}", f"https://example.com/post{i}")
+            time.sleep(1)  # Ensure unique timestamp (1 second delay)
             activity_obj, activity_id = create_activity(post_obj, post_id)
             posts_and_ids.append((post_obj, post_id, activity_obj, activity_id))
+            time.sleep(1)  # Ensure unique timestamp for next iteration
         
         # Regenerate outbox
         regenerate_outbox()
         
         # Check outbox file was created
-        self.assertTrue(os.path.exists('static/outbox.json'))
-        
+        self.assert_file_exists('outbox', 'outbox.json')
+
         # Verify outbox contents
-        with open('static/outbox.json', 'r') as f:
+        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
+        with open(outbox_path, 'r') as f:
             outbox = json.load(f)
         
         self.assertEqual(outbox['@context'], "https://www.w3.org/ns/activitystreams")
@@ -213,11 +191,16 @@ class TestPostCreation(unittest.TestCase):
     def test_get_actor_info(self):
         """Test actor info retrieval"""
         actor = get_actor_info()
-        self.assertEqual(actor, self.test_actor)
+        # Verify actor has expected structure from the created test actor
+        self.assertIsNotNone(actor)
+        self.assertEqual(actor['type'], 'Person')
+        self.assertEqual(actor['preferredUsername'], 'test')
+        self.assertEqual(actor['name'], 'Test Actor')
     
     def test_get_actor_info_missing_file(self):
         """Test actor info when file doesn't exist"""
-        os.remove('static/actor.json')
+        actor_path = self.get_test_file_path('outbox', 'actor.json')
+        os.remove(actor_path)
 
         with patch('builtins.print'):  # Suppress warning print
             actor = get_actor_info()
@@ -231,16 +214,15 @@ class TestPostCreation(unittest.TestCase):
         activity_obj, activity_id = create_activity(post_obj, post_id)
 
         # Verify we have exactly one valid activity file at this point
-        activities_files = [f for f in os.listdir('static/activities') if f.endswith('.json')]
-        self.assertEqual(len(activities_files), 1, f"Expected 1 activity file, found {len(activities_files)}: {activities_files}")
+        self.assert_file_count('activities', 1, '*.json')
 
         # Create malformed JSON file
-        malformed_json_path = 'static/activities/malformed.json'
+        malformed_json_path = self.get_test_file_path('activities', 'malformed.json')
         with open(malformed_json_path, 'w') as f:
             f.write('{ "invalid": json syntax here')
 
         # Create structurally invalid but well-formed JSON
-        invalid_structure_path = 'static/activities/invalid-structure.json'
+        invalid_structure_path = self.get_test_file_path('activities', 'invalid-structure.json')
         invalid_activity = {
             "someField": "value",
             "missing": "required fields like type, id, actor",
@@ -266,9 +248,10 @@ class TestPostCreation(unittest.TestCase):
         self.assertIn('invalid-structure.json', output)
 
         # Verify outbox was created successfully
-        self.assertTrue(os.path.exists('static/outbox.json'))
+        self.assert_file_exists('outbox', 'outbox.json')
 
-        with open('static/outbox.json', 'r') as f:
+        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
+        with open(outbox_path, 'r') as f:
             outbox = json.load(f)
 
         # Verify the correction worked: totalItems should match orderedItems length
@@ -284,47 +267,26 @@ class TestPostCreation(unittest.TestCase):
             self.assertEqual(item['type'], 'Create')
 
 
-class TestCLIIntegration(unittest.TestCase):
+class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
     """Integration tests for the CLI workflow"""
-    
+
     def setUp(self):
-        """Set up temporary directory for test files"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        
-        # Create test config and actor as above
-        test_config = {
-            "server": {"domain": "cli-test.example.com"},
-            "activitypub": {"namespace": "activitypub"},
-            "security": {
-                "public_key_file": "test_public.pem",
-                "private_key_file": "test_private.pem"
-            }
-        }
-        
-        with open('config.json', 'w') as f:
-            json.dump(test_config, f)
-        
-        os.makedirs('static', exist_ok=True)
-        test_actor = {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Person",
-            "id": "https://cli-test.example.com/activitypub/actor"
-        }
-        
-        with open('static/actor.json', 'w') as f:
-            json.dump(test_actor, f)
-    
+        """Set up test environment"""
+        self.setup_test_environment("cli_integration",
+                                   server={"domain": "cli-test.example.com"})
+
+        # Create test actor for CLI tests
+        self.create_test_actor(actor_name="CLI Test Actor")
+
+        # Actor is already created by create_test_actor, no need to write again
+
     def tearDown(self):
-        """Clean up temporary directory"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        """Clean up test environment"""
+        self.teardown_test_environment()
     
     def test_cli_workflow(self):
         """Test the complete CLI workflow"""
         # Import and run the CLI functions
-        sys.path.insert(0, self.original_cwd)
         from post_utils import create_post, create_activity, regenerate_outbox
         
         # Simulate CLI command
@@ -338,12 +300,13 @@ class TestCLIIntegration(unittest.TestCase):
         regenerate_outbox()
         
         # Verify all files were created
-        self.assertTrue(os.path.exists(f'static/posts/{post_id}.json'))
-        self.assertTrue(os.path.exists(f'static/activities/{activity_id}.json'))
-        self.assertTrue(os.path.exists('static/outbox.json'))
-        
+        self.assert_file_exists('posts', f'{post_id}.json')
+        self.assert_file_exists('activities', f'{activity_id}.json')
+        self.assert_file_exists('outbox', 'outbox.json')
+
         # Verify outbox contains the new post
-        with open('static/outbox.json', 'r') as f:
+        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
+        with open(outbox_path, 'r') as f:
             outbox = json.load(f)
         
         self.assertEqual(outbox['totalItems'], 1)
@@ -352,7 +315,6 @@ class TestCLIIntegration(unittest.TestCase):
     def test_cli_note_workflow(self):
         """Test the complete CLI workflow for Note posts"""
         # Import and run the CLI functions
-        sys.path.insert(0, self.original_cwd)
         from post_utils import create_post, create_activity, regenerate_outbox
 
         # Simulate CLI command for Note (no title required)
@@ -365,19 +327,21 @@ class TestCLIIntegration(unittest.TestCase):
         regenerate_outbox()
 
         # Verify all files were created
-        self.assertTrue(os.path.exists(f'static/posts/{post_id}.json'))
-        self.assertTrue(os.path.exists(f'static/activities/{activity_id}.json'))
-        self.assertTrue(os.path.exists('static/outbox.json'))
+        self.assert_file_exists('posts', f'{post_id}.json')
+        self.assert_file_exists('activities', f'{activity_id}.json')
+        self.assert_file_exists('outbox', 'outbox.json')
 
         # Verify post is a Note type
-        with open(f'static/posts/{post_id}.json', 'r') as f:
+        post_path = self.get_test_file_path('posts', f'{post_id}.json')
+        with open(post_path, 'r') as f:
             post = json.load(f)
         self.assertEqual(post['type'], 'Note')
         self.assertEqual(post['content'], content)
         self.assertNotIn('name', post)  # No title for Note
 
         # Verify outbox contains the new post
-        with open('static/outbox.json', 'r') as f:
+        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
+        with open(outbox_path, 'r') as f:
             outbox = json.load(f)
 
         self.assertEqual(outbox['totalItems'], 1)

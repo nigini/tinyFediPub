@@ -87,6 +87,18 @@ pip install -r requirements.txt
 python -m pytest tests/ -v
 ```
 
+### Writing Tests
+
+This project uses a comprehensive test isolation strategy to ensure reliable testing. All test classes should inherit from `TestConfigMixin` for proper test isolation.
+
+**Key principles:**
+- Each test gets its own temporary directory and configuration
+- Module reload prevents global variable caching issues
+- Configuration-driven paths (no hardcoded references)
+- Import app modules INSIDE test methods, AFTER `setUp()` runs
+
+**See `tests/test_config.py`** for complete documentation, usage patterns, helper methods, and implementation details of the test configuration strategy.
+
 ### Creating Posts
 
 Use the CLI tool to create new ActivityPub posts:

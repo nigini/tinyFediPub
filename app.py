@@ -50,14 +50,26 @@ CONTENT_TYPE_LD = 'application/ld+json; profile="https://www.w3.org/ns/activitys
 
 def load_json_file(filename):
     """Load JSON data from static files"""
-    filepath = os.path.join('static', filename)
+    # Determine which directory based on filename
+    if filename == 'followers.json':
+        base_dir = config['directories']['followers']
+    elif filename == 'actor.json':
+        base_dir = config['directories']['outbox']
+    elif filename == 'outbox.json':
+        base_dir = config['directories']['outbox']
+    else:
+        # Default to outbox directory for other files
+        base_dir = config['directories']['outbox']
+
+    filepath = os.path.join(base_dir, filename)
     with open(filepath, 'r') as f:
         return json.load(f)
 
 def write_actor_config():
-    """Write actor configuration to static/actor.json"""
+    """Write actor configuration to actor.json"""
     actor_config = templates.render_actor(config, PUBLIC_KEY_PEM)
-    filepath = os.path.join('static', 'actor.json')
+    outbox_dir = config['directories']['outbox']
+    filepath = os.path.join(outbox_dir, 'actor.json')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, 'w') as f:
         json.dump(actor_config, f, indent=2)
@@ -164,7 +176,8 @@ def ensure_followers_file_exists():
     import os
     from post_utils import get_actor_info
 
-    filepath = 'static/followers.json'
+    followers_dir = config['directories']['followers']
+    filepath = os.path.join(followers_dir, 'followers.json')
     if not os.path.exists(filepath):
         actor = get_actor_info()
         if actor:
@@ -172,7 +185,7 @@ def ensure_followers_file_exists():
             followers_collection = templates.render_followers_collection(
                 followers_id=f"{base_url}/followers"
             )
-            os.makedirs('static', exist_ok=True)
+            os.makedirs(followers_dir, exist_ok=True)
             with open(filepath, 'w') as f:
                 json.dump(followers_collection, f, indent=2)
 

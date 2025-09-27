@@ -12,34 +12,26 @@ from unittest.mock import patch
 
 # Add current directory to path for imports
 sys.path.insert(0, '.')
+from tests.test_config import TestConfigMixin
 
-class TestFlaskApp(unittest.TestCase):
+class TestFlaskApp(unittest.TestCase, TestConfigMixin):
     
     def setUp(self):
         """Set up test client and temporary files"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        
-        # Create test config
-        test_config = {
-            "server": {"domain": "app-test.example.com", "protocol": "https", "host": "127.0.0.1", "port": 5000, "debug": True},
-            "activitypub": {"username": "testuser", "actor_name": "Test User", "actor_summary": "Test actor", "namespace": "activitypub"},
-            "security": {"public_key_file": "test_public.pem", "private_key_file": "test_private.pem"}
-        }
-        
-        with open('config.json', 'w') as f:
-            json.dump(test_config, f)
-        
-        # Create test static files
-        os.makedirs('static', exist_ok=True)
-        
+        self.setup_test_environment("flask_app",
+                                   server={"domain": "app-test.example.com"},
+                                   activitypub={"username": "testuser", "actor_name": "Test User"})
+
+        # Create test actor
+        self.create_test_actor(actor_name="Test User")
+
         # Create webfinger.json
         webfinger = {
             "subject": "acct:testuser@app-test.example.com",
             "links": [{"rel": "self", "type": "application/activity+json", "href": "https://app-test.example.com/activitypub/actor"}]
         }
-        with open('static/webfinger.json', 'w') as f:
+        webfinger_path = self.get_test_file_path('outbox', 'webfinger.json')
+        with open(webfinger_path, 'w') as f:
             json.dump(webfinger, f)
         
         # Import app and set up test client
@@ -54,9 +46,8 @@ class TestFlaskApp(unittest.TestCase):
             write_actor_config()
     
     def tearDown(self):
-        """Clean up"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        """Clean up test environment"""
+        self.teardown_test_environment()
     
     def test_webfinger_endpoint(self):
         """Test WebFinger discovery endpoint"""

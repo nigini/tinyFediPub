@@ -3,52 +3,22 @@
 Unit tests for ActivityPub inbox functionality
 """
 import unittest
-import tempfile
-import shutil
-import os
 import json
 import sys
+sys.path.insert(0, '.')
+from tests.test_config import TestConfigMixin
 
 
-class TestInboxFunctionality(unittest.TestCase):
+class TestInboxFunctionality(unittest.TestCase, TestConfigMixin):
     """Test inbox activity saving and processing"""
 
     def setUp(self):
-        """Set up temporary directory for test files"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        sys.path.insert(0, self.original_cwd)
-
-        # Create test config (copy from example)
-        test_config = {
-            "server": {
-                "domain": "test.example.com",
-                "protocol": "https",
-                "host": "0.0.0.0",
-                "port": 5000,
-                "debug": True
-            },
-            "activitypub": {
-                "username": "test",
-                "actor_name": "Test Actor",
-                "actor_summary": "A test actor",
-                "namespace": "activitypub"
-            },
-            "security": {
-                "public_key_file": "test.pem",
-                "private_key_file": "test.pem"
-            }
-        }
-        with open('config.json', 'w') as f:
-            json.dump(test_config, f)
-        with open('test.pem', 'w') as f:
-            f.write('test key')
+        """Set up test environment"""
+        self.setup_test_environment("inbox_functionality")
 
     def tearDown(self):
-        """Clean up temporary directory"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        """Clean up test environment"""
+        self.teardown_test_environment()
 
     def test_save_follow_activity(self):
         """Test saving Follow activity to inbox folder"""
@@ -64,10 +34,10 @@ class TestInboxFunctionality(unittest.TestCase):
         save_inbox_activity(follow_activity)
 
         # Check file was created with correct pattern
-        inbox_files = os.listdir('static/inbox')
-        self.assertEqual(len(inbox_files), 1)
+        self.assert_file_count('inbox', 1)
 
-        filename = inbox_files[0]
+        # Get the single file and verify naming
+        filename = self.get_single_file_in_directory('inbox')
         self.assertTrue(filename.startswith('follow-'))
         self.assertTrue(filename.endswith('-mastodon-social.json'))
 
@@ -84,8 +54,8 @@ class TestInboxFunctionality(unittest.TestCase):
 
         save_inbox_activity(undo_activity)
 
-        inbox_files = os.listdir('static/inbox')
-        filename = inbox_files[0]
+        self.assert_file_count('inbox', 1)
+        filename = self.get_single_file_in_directory('inbox')
         self.assertTrue(filename.startswith('undo-'))
         self.assertTrue(filename.endswith('-pixelfed-social.json'))
 
@@ -101,37 +71,22 @@ class TestInboxFunctionality(unittest.TestCase):
 
         save_inbox_activity(bad_activity)
 
-        inbox_files = os.listdir('static/inbox')
-        filename = inbox_files[0]
+        self.assert_file_count('inbox', 1)
+        filename = self.get_single_file_in_directory('inbox')
         self.assertTrue(filename.startswith('like-'))
         self.assertTrue(filename.endswith('-unknown.json'))
 
 
-class TestInboxEndpoint(unittest.TestCase):
+class TestInboxEndpoint(unittest.TestCase, TestConfigMixin):
     """Test the inbox HTTP endpoint"""
 
     def setUp(self):
-        """Set up Flask test client"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        sys.path.insert(0, self.original_cwd)
-
-        # Create test config and keys
-        test_config = {
-            "server": {"domain": "test.example.com", "protocol": "https", "host": "0.0.0.0", "port": 5000, "debug": True},
-            "activitypub": {"namespace": "activitypub", "username": "test", "actor_name": "Test", "actor_summary": "Test"},
-            "security": {"public_key_file": "test.pem", "private_key_file": "test.pem"}
-        }
-        with open('config.json', 'w') as f:
-            json.dump(test_config, f)
-        with open('test.pem', 'w') as f:
-            f.write('test key')
+        """Set up test environment"""
+        self.setup_test_environment("inbox_endpoint")
 
     def tearDown(self):
-        """Clean up"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        """Clean up test environment"""
+        self.teardown_test_environment()
 
     def test_inbox_accepts_follow(self):
         """Test that inbox endpoint accepts Follow activities"""

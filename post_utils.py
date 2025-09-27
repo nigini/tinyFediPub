@@ -3,6 +3,7 @@
 Utilities for creating ActivityPub posts
 """
 import json
+import os
 import re
 from datetime import datetime
 from template_utils import templates
@@ -148,7 +149,8 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
         )
     
     # Save post file
-    posts_dir = 'static/posts'
+    config = load_config()
+    posts_dir = config['directories']['posts']
     os.makedirs(posts_dir, exist_ok=True)
     post_path = os.path.join(posts_dir, f'{post_id}.json')
     with open(post_path, 'w') as f:
@@ -160,16 +162,19 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
 def get_actor_info():
     """
     Get actor information from generated actor.json
-    
+
     Returns:
         dict: Actor object with id, etc.
     """
     try:
-        with open('static/actor.json', 'r') as f:
+        config = load_config()
+        outbox_dir = config['directories']['outbox']
+        actor_file = os.path.join(outbox_dir, 'actor.json')
+        with open(actor_file, 'r') as f:
             return json.load(f)
     except FileNotFoundError:
         # Fallback: generate from config if actor.json doesn't exist
-        print("Warning: static/actor.json not found. Run the server first to generate it.")
+        print("Warning: actor.json not found. Run the server first to generate it.")
         return None
 
 def create_activity(post_object, post_id):
@@ -206,7 +211,8 @@ def create_activity(post_object, post_id):
     )
     
     # Save activity file
-    activities_dir = 'static/activities'
+    config = load_config()
+    activities_dir = config['directories']['activities']
     os.makedirs(activities_dir, exist_ok=True)
     activity_path = os.path.join(activities_dir, f'{activity_id}.json')
     with open(activity_path, 'w') as f:
@@ -227,11 +233,13 @@ def regenerate_outbox():
         raise Exception("Cannot generate outbox: actor.json not found")
 
     base_url = actor['id'].rsplit('/actor', 1)[0]
-    activities_dir = 'static/activities'
-    outbox_path = 'static/outbox.json'
+    config = load_config()
+    activities_dir = config['directories']['activities']
+    outbox_dir = config['directories']['outbox']
+    outbox_path = os.path.join(outbox_dir, 'outbox.json')
 
-    # Ensure static directory exists
-    os.makedirs('static', exist_ok=True)
+    # Ensure directories exist
+    os.makedirs(outbox_dir, exist_ok=True)
 
     # Use streaming template rendering
     activity_count = templates.render_outbox_streaming(
