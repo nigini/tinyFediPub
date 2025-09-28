@@ -139,47 +139,76 @@ Comprehensive test suite in `tests/` covering:
 - Format: `{"filename": "timestamp"}` for chronological processing
 - Documented activity processing strategy in README.md "To Consider" section
 
-## Recent Progress (2025-09-23)
+## Recent Progress (2025-09-27)
 
-**Activity Processing System:**
+**Activity Processing System (Completed):**
 - ✅ **Implemented `activity_processor.py`** - Separate module using strategy pattern for clean separation
-- ✅ **Strategy Pattern** - `BaseActivityProcessor` with `FollowActivityProcessor` and `UndoActivityProcessor`
-- ✅ **Registry-based Selection** - Simple dictionary lookup: `PROCESSORS[activity_type]`
+- ✅ **Extensible Processor Architecture** - Composite key system (`Follow`, `Undo`, `Undo.Follow`) for delegation
+- ✅ **FollowActivityProcessor** - Adds followers to `followers.json`, generates Accept activities (respects auto-accept config)
+- ✅ **UndoActivityProcessor** - Delegates to specific undo processors based on object type
+- ✅ **UndoFollowActivityProcessor** - Removes followers from collection, handles non-existent followers gracefully
+- ✅ **Registry-based Selection** - Clean lookup: `PROCESSORS[activity_type]` and `PROCESSORS['Undo.Follow']`
 - ✅ **Symlink-based Queue** - Avoids concurrency issues with `static/inbox/queue/` directory
-- ✅ **Config-driven Directories** - Added `directories` section to `config.json.example`
-- ✅ **Modified Inbox Endpoint** - Now queues all activities automatically via `queue_activity_for_processing()`
+- ✅ **Config-driven Directories** - All paths use `config.json` for flexibility
 
-**Configuration Updates:**
-- Added `directories` config section with paths for `inbox`, `inbox_queue`, `outbox`, `posts`, `activities`, `followers`
-- All hardcoded paths now use config variables for flexibility
+**Shared Utility Functions:**
+- ✅ **`generate_base_url(config)`** - Eliminates URL construction duplication
+- ✅ **`get_followers_list(config)`** - Shared follower management between processors
+- ✅ **Template System Integration** - All activities use Jinja2 templates (`accept.json.j2`)
+
+**Complete Follow/Unfollow Workflow:**
+- ✅ **Follow Processing** - Auto-accept (configurable), follower addition, Accept activity generation
+- ✅ **Undo Follow Processing** - Follower removal, proper delegation through `UndoActivityProcessor`
+- ✅ **Duplicate Handling** - Multiple follows from same actor handled correctly
+- ✅ **Configuration Support** - Respects `auto_accept_follow_requests` setting
+- ✅ **Error Resilience** - Handles missing actors, malformed activities, non-existent followers
+
+**Test Infrastructure (16 Tests Passing):**
+- ✅ **Comprehensive Coverage** - All follow/unfollow scenarios tested
+- ✅ **Delegation Testing** - Verifies `UndoActivityProcessor` routes to correct sub-processors
+- ✅ **Consistent Test Setup** - Module reload prevents config caching issues between tests
+- ✅ **Edge Case Testing** - Non-existent followers, duplicate follows, auto-accept disabled
+- ✅ **Integration Testing** - Complete workflow verification
 
 **Architecture Improvements:**
-- Clean separation: Flask handles HTTP, `activity_processor.py` handles federation logic
-- Extensible processor system - easy to add new activity types
-- No shared files = no concurrency issues between web server and processor
+- ✅ **Clean Separation** - Flask handles HTTP, processors handle federation logic
+- ✅ **Extensible Design** - Easy to add `Undo.Like`, `Undo.Announce`, etc.
+- ✅ **No Concurrency Issues** - Symlink-based queue prevents file conflicts
+- ✅ **Template-driven** - All ActivityPub entities generated consistently
 
-✅ **Fully Tested** - The activity processing system has comprehensive test coverage and all tests pass
+## Critical TODO Items
 
-**Test Infrastructure Overhaul (2025-09-27):**
-- ✅ **TestConfigMixin Strategy** - Standardized test isolation using `tests/test_config.py`
-- ✅ **Module Reload Solution** - Fixed test isolation issues with `importlib.reload(app)`
-- ✅ **Configuration-driven Tests** - Eliminated all hardcoded paths in test suite
-- ✅ **Comprehensive Activity Processor Tests** - Full coverage of processor workflow
-- ✅ **All 43 Tests Pass** - Complete test suite reliability in full runs
-- ✅ **Test Documentation** - Complete usage patterns and helper methods documented
+**High Priority (Security & Production Readiness):**
 
-⏳ **Next Steps (Immediate):**
-- Implement actual functionality in Follow/Undo processors (currently placeholders)
-- Generate Accept activities for Follow requests in `FollowActivityProcessor.process()`
-- Add followers to `followers.json` collection when processing Follow activities
-- Remove followers from collection in `UndoActivityProcessor.process()`
+1. **Activity ID Naming System**
+   - **Problem**: Timestamp-based IDs cause conflicts when activities processed in same second
+   - **Solution**: Implement Content-Addressable Storage (CAS) using SHA-256 content hashes
+   - **Benefits**: Guaranteed uniqueness, immutability, easy duplicate detection
+   - **Example**: `accept-a7b9c3d2e1f4...` instead of `accept-20250927-234936`
 
-⏳ **Future (Manual Approval):**
-- Manual follow approval workflow when `auto_accept_follow_requests: false`
-- Possible `/pending-followers` endpoint for management
-- CLI tools for processing pending requests
-- Activity delivery to followers (outgoing activities)
-- HTTP signature verification for secure federation
+2. **Outbox Directory Organization**
+   - **Problem**: Outgoing activities scattered in `static/activities/` with incoming posts
+   - **Solution**: Mirror inbox structure with dedicated outbox folders
+   - **Structure**: `static/outbox/` with `queue/` subdirectory for delivery
+   - **Benefits**: Clear separation, organized file management, future delivery queue
+
+3. **HTTP Signature Verification (CRITICAL)**
+   - **Problem**: Currently accepting activities without authentication (security vulnerability)
+   - **Solution**: Implement RFC 9421 HTTP Signature verification
+   - **Requirements**: Actor public key fetching, signature validation, error handling
+   - **Priority**: Essential before production deployment
+
+4. **Activity Delivery System**
+   - **Problem**: Generated Accept activities not sent to follower inboxes
+   - **Dependencies**: Requires HTTP signature implementation for outgoing signing
+   - **Solution**: POST signed activities to follower inbox endpoints
+   - **Scope**: Complete bidirectional federation capability
+
+**Implementation Notes:**
+- Use existing config system for new directory structures
+- Leverage template system for consistent outgoing activity format
+- Build on existing `generate_activity_id()` pattern for CAS implementation
+- Integrate with current processor architecture for delivery queue
 
 **Usage:**
 ```bash
@@ -191,6 +220,9 @@ ls static/inbox/queue/
 
 # Check processed activities
 ls static/inbox/
+
+# Check generated Accept activities
+ls static/activities/accept-*
 ```
 
-The server now has a complete activity processing system architecture, moving from "read-only" toward full federation capability.
+**Current Status**: The server now has **complete follow/unfollow processing** with proper delegation architecture. Next phase focuses on **security hardening** and **production deployment readiness**.

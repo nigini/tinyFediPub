@@ -142,6 +142,28 @@ class ActivityPubTemplates:
 
         return self.render_json_template('activities/create.json.j2', **template_data)
 
+    def render_accept_activity(self, activity_id, actor_id, published, follow_object):
+        """
+        Render Accept activity template
+
+        Args:
+            activity_id: Activity ID
+            actor_id: Actor ID performing the activity
+            published: Published timestamp
+            follow_object: The Follow activity being accepted
+
+        Returns:
+            dict: Accept activity JSON object
+        """
+        template_data = {
+            'activity_id': activity_id,
+            'actor_id': actor_id,
+            'published': published,
+            'object': follow_object
+        }
+
+        return self.render_json_template('activities/accept.json.j2', **template_data)
+
     def render_followers_collection(self, followers_id, followers_list=None):
         """
         Render followers collection template

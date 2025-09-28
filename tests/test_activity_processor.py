@@ -61,6 +61,14 @@ class TestActivityProcessor(unittest.TestCase):
         os.makedirs(test_config['directories']['inbox_queue'], exist_ok=True)
         os.makedirs(test_config['directories']['activities'], exist_ok=True)
 
+        # Reload activity processor module to pick up fresh config
+        import importlib
+        try:
+            import activity_processor
+            importlib.reload(activity_processor)
+        except ImportError:
+            pass  # Module not imported yet, which is fine
+
     def tearDown(self):
         """Clean up temporary directory"""
         os.chdir(self.original_cwd)
@@ -83,25 +91,132 @@ class TestActivityProcessor(unittest.TestCase):
         result = processor.process(follow_activity, "test-follow.json")
         self.assertTrue(result)
 
-        # TODO: Verify Accept activity was created in static/activities/
-        # TODO: Verify follower was added to static/followers.json
-        # TODO: Check that Accept activity has correct structure
+        # Verify Accept activity was created in static/activities/
+        activities_dir = self.config['directories']['activities']
+        activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
+        self.assertEqual(len(activity_files), 1, "Should have created exactly one Accept activity")
+
+        # Load and verify Accept activity structure
+        with open(os.path.join(activities_dir, activity_files[0])) as f:
+            accept_activity = json.load(f)
+
+        self.assertEqual(accept_activity['type'], 'Accept')
+        self.assertEqual(accept_activity['actor'], 'https://test.example.com/activitypub/actor')
+        self.assertEqual(accept_activity['object'], follow_activity)
+        self.assertTrue(accept_activity['id'].startswith('https://test.example.com/activitypub/activities/accept-'))
+
+        # Verify follower was added to static/followers.json
+        followers_dir = self.config['directories']['followers']
+        followers_file = os.path.join(followers_dir, 'followers.json')
+        self.assertTrue(os.path.exists(followers_file), "followers.json should be created")
+
+        with open(followers_file) as f:
+            followers_data = json.load(f)
+
+        self.assertEqual(followers_data['type'], 'Collection')
+        self.assertEqual(followers_data['totalItems'], 1)
+        self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
+
+    def test_duplicate_follow_processing(self):
+        """Test that duplicate follows don't create duplicate followers"""
+        from activity_processor import FollowActivityProcessor
+
+        processor = FollowActivityProcessor()
+
+        follow_activity = {
+            "type": "Follow",
+            "actor": "https://mastodon.social/users/alice",
+            "object": "https://test.example.com/activitypub/actor",
+            "id": "https://mastodon.social/activities/123"
+        }
+
+        # Process the same follow twice
+        result1 = processor.process(follow_activity, "test-follow-1.json")
+
+        # Sleep to ensure different timestamps for activity IDs
+        import time
+        time.sleep(1)
+
+        result2 = processor.process(follow_activity, "test-follow-2.json")
+
+        self.assertTrue(result1)
+        self.assertTrue(result2)
+
+        # Verify only one follower exists
+        followers_dir = self.config['directories']['followers']
+        followers_file = os.path.join(followers_dir, 'followers.json')
+
+        with open(followers_file) as f:
+            followers_data = json.load(f)
+
+        self.assertEqual(followers_data['totalItems'], 1)
+        self.assertEqual(len(followers_data['items']), 1)
+        self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
+
+        # Verify two Accept activities were created (one for each follow)
+        activities_dir = self.config['directories']['activities']
+        activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
+        self.assertEqual(len(activity_files), 2, "Should have created two Accept activities")
+
+    def test_follow_processing_with_auto_accept_disabled(self):
+        """Test Follow processing when auto_accept_follow_requests is false"""
+        # Update config to disable auto-accept
+        with open('config.json', 'r') as f:
+            config = json.load(f)
+        config['activitypub']['auto_accept_follow_requests'] = False
+        with open('config.json', 'w') as f:
+            json.dump(config, f)
+
+        # Reload the activity processor module to pick up new config
+        import importlib
+        import activity_processor
+        importlib.reload(activity_processor)
+
+        from activity_processor import FollowActivityProcessor
+
+        processor = FollowActivityProcessor()
+
+        follow_activity = {
+            "type": "Follow",
+            "actor": "https://mastodon.social/users/bob",
+            "object": "https://test.example.com/activitypub/actor",
+            "id": "https://mastodon.social/activities/456"
+        }
+
+        # Test processing
+        result = processor.process(follow_activity, "test-follow-no-auto.json")
+        self.assertTrue(result)
+
+        # Verify NO follower was added to followers.json when auto-accept is disabled
+        followers_dir = self.config['directories']['followers']
+        followers_file = os.path.join(followers_dir, 'followers.json')
+
+        if os.path.exists(followers_file):
+            with open(followers_file) as f:
+                followers_data = json.load(f)
+            # Should be empty or not contain the new follower
+            self.assertNotIn('https://mastodon.social/users/bob', followers_data.get('items', []))
+
+        # Verify NO Accept activity was created when auto-accept is disabled
+        activities_dir = self.config['directories']['activities']
+        activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
+        self.assertEqual(len(activity_files), 0, "Should not have created Accept activities when auto-accept is disabled")
 
     def test_undo_follow_activity_processor(self):
         """Test Undo Follow activity processing"""
-        from activity_processor import UndoActivityProcessor
+        from activity_processor import UndoFollowActivityProcessor
 
-        processor = UndoActivityProcessor()
+        processor = UndoFollowActivityProcessor()
 
         # First, let's assume there's a follower to remove
         followers_dir = self.config['directories']['followers']
         os.makedirs(followers_dir, exist_ok=True)
         followers_data = {
             "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "OrderedCollection",
+            "type": "Collection",
             "id": "https://test.example.com/activitypub/followers",
             "totalItems": 1,
-            "orderedItems": ["https://mastodon.social/users/alice"]
+            "items": ["https://mastodon.social/users/alice"]
         }
         followers_file = os.path.join(followers_dir, 'followers.json')
         with open(followers_file, 'w') as f:
@@ -122,8 +237,58 @@ class TestActivityProcessor(unittest.TestCase):
         result = processor.process(undo_activity, "test-undo.json")
         self.assertTrue(result)
 
-        # TODO: Verify follower was removed from followers.json
-        # TODO: Check that followers.json totalItems was decremented
+        # Verify follower was removed from followers.json
+        self.assertTrue(os.path.exists(followers_file), "followers.json should still exist")
+
+        with open(followers_file) as f:
+            updated_followers_data = json.load(f)
+
+        self.assertEqual(updated_followers_data['type'], 'Collection')
+        self.assertEqual(updated_followers_data['totalItems'], 0)
+        self.assertEqual(len(updated_followers_data['items']), 0)
+        self.assertNotIn('https://mastodon.social/users/alice', updated_followers_data['items'])
+
+    def test_undo_follow_nonexistent_follower(self):
+        """Test Undo Follow when follower doesn't exist"""
+        from activity_processor import UndoFollowActivityProcessor
+
+        processor = UndoFollowActivityProcessor()
+
+        # Create empty followers collection
+        followers_dir = self.config['directories']['followers']
+        os.makedirs(followers_dir, exist_ok=True)
+        followers_data = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Collection",
+            "id": "https://test.example.com/activitypub/followers",
+            "totalItems": 0,
+            "items": []
+        }
+        followers_file = os.path.join(followers_dir, 'followers.json')
+        with open(followers_file, 'w') as f:
+            json.dump(followers_data, f)
+
+        undo_activity = {
+            "type": "Undo",
+            "actor": "https://mastodon.social/users/bob",
+            "object": {
+                "type": "Follow",
+                "actor": "https://mastodon.social/users/bob",
+                "object": "https://test.example.com/activitypub/actor"
+            },
+            "id": "https://mastodon.social/activities/789"
+        }
+
+        # Test processing - should succeed even if follower doesn't exist
+        result = processor.process(undo_activity, "test-undo-nonexistent.json")
+        self.assertTrue(result)
+
+        # Verify followers collection remains unchanged
+        with open(followers_file) as f:
+            updated_followers_data = json.load(f)
+
+        self.assertEqual(updated_followers_data['totalItems'], 0)
+        self.assertEqual(len(updated_followers_data['items']), 0)
 
     def test_unknown_activity_processor(self):
         """Test handling of unknown activity types"""
@@ -135,15 +300,17 @@ class TestActivityProcessor(unittest.TestCase):
 
     def test_activity_processor_registry(self):
         """Test that the processor registry is properly configured"""
-        from activity_processor import PROCESSORS, FollowActivityProcessor, UndoActivityProcessor
+        from activity_processor import PROCESSORS, FollowActivityProcessor, UndoActivityProcessor, UndoFollowActivityProcessor
 
         # Check that expected processors are registered
         self.assertIn('Follow', PROCESSORS)
         self.assertIn('Undo', PROCESSORS)
+        self.assertIn('Undo.Follow', PROCESSORS)
 
         # Check processor types
         self.assertIsInstance(PROCESSORS['Follow'], FollowActivityProcessor)
         self.assertIsInstance(PROCESSORS['Undo'], UndoActivityProcessor)
+        self.assertIsInstance(PROCESSORS['Undo.Follow'], UndoFollowActivityProcessor)
 
     def test_queue_directory_creation(self):
         """Test that queue directory is created properly"""
@@ -257,6 +424,52 @@ class TestActivityProcessor(unittest.TestCase):
 
         result = processor.process(undo_like, "test-undo-like.json")
         self.assertTrue(result)  # Should succeed but be ignored
+
+    def test_undo_delegation_mechanism(self):
+        """Test that UndoActivityProcessor properly delegates to specific processors"""
+        from activity_processor import UndoActivityProcessor, FollowActivityProcessor
+
+        # Create a follower first
+        follow_processor = FollowActivityProcessor()
+        follow_activity = {
+            "type": "Follow",
+            "actor": "https://mastodon.social/users/alice",
+            "object": "https://test.example.com/activitypub/actor",
+            "id": "https://mastodon.social/activities/123"
+        }
+        follow_processor.process(follow_activity, "test-follow.json")
+
+        # Verify follower was added
+        followers_dir = self.config['directories']['followers']
+        followers_file = os.path.join(followers_dir, 'followers.json')
+        self.assertTrue(os.path.exists(followers_file))
+
+        with open(followers_file) as f:
+            followers_data = json.load(f)
+        self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
+
+        # Now test Undo delegation
+        undo_processor = UndoActivityProcessor()
+        undo_activity = {
+            "type": "Undo",
+            "actor": "https://mastodon.social/users/alice",
+            "object": {
+                "type": "Follow",
+                "actor": "https://mastodon.social/users/alice",
+                "object": "https://test.example.com/activitypub/actor"
+            },
+            "id": "https://mastodon.social/activities/456"
+        }
+
+        # Process undo through main processor
+        result = undo_processor.process(undo_activity, "test-undo-delegation.json")
+        self.assertTrue(result)
+
+        # Verify follower was removed by the delegated processor
+        with open(followers_file) as f:
+            followers_data = json.load(f)
+        self.assertNotIn('https://mastodon.social/users/alice', followers_data['items'])
+        self.assertEqual(followers_data['totalItems'], 0)
 
 
 class TestActivityQueueIntegration(unittest.TestCase):

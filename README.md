@@ -177,10 +177,16 @@ static/
 
 ## What's Next
 
-**In Development:**
-- Follow request processing (add to followers, generate Accept activities)
-- Activity delivery to followers (send your posts to follower inboxes)
-- HTTP signature verification for secure federation
+**Completed (2025-09-27):**
+- ✅ Follow request processing (add to followers, generate Accept activities)
+- ✅ Undo Follow processing (remove followers)
+- ✅ Extensible activity processor architecture with composite keys
+
+**High Priority TODO:**
+- **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
+- **Outbox folder organization** - Create dedicated outbox directory structure mirroring inbox organization for better file management
+- **HTTP signature verification** - Implement cryptographic signature validation for all incoming activities (critical for security)
+- **Activity delivery system** - Send activities to follower inboxes (depends on signature implementation for outgoing activity signing)
 
 **Future Enhancements:**
 - Manual follow approval workflow
