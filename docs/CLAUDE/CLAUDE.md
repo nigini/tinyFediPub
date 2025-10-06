@@ -178,33 +178,46 @@ Comprehensive test suite in `tests/` covering:
 
 ## Critical TODO Items
 
-**High Priority (Security & Production Readiness):**
+**Immediate Priority:**
 
-1. **Activity ID Naming System**
+1. **Write Automated Tests for HTTP Signatures** ⚠️ **DO THIS FIRST**
+   - **Status**: Code implemented but untested
+   - **Requirements**:
+     - Test signature verification (valid, invalid, expired, missing headers)
+     - Test signature signing (correct format, algorithm, headers)
+     - Test public key fetching (with/without fragments, caching)
+     - Test digest computation and verification
+     - Test date validation (recent, expired, future)
+     - Test inbox with signature enforcement on/off
+   - **Priority**: CRITICAL - signature code is security-critical and must be tested before deployment
+   - **File**: `tests/test_http_signatures.py`
+
+**High Priority (Next Steps):**
+
+2. **Activity Delivery System**
+   - **Status**: Signatures implemented, delivery module next
+   - **Requirements**:
+     - Fetch actor inbox URLs
+     - Sign outgoing activities with `sign_request()`
+     - POST to follower inboxes
+     - Handle delivery errors and retries
+   - **Scope**: Complete bidirectional federation capability
+   - **File**: `activity_delivery.py`
+
+3. **Activity ID Naming System**
    - **Problem**: Timestamp-based IDs cause conflicts when activities processed in same second
    - **Solution**: Implement Content-Addressable Storage (CAS) using SHA-256 content hashes
    - **Benefits**: Guaranteed uniqueness, immutability, easy duplicate detection
    - **Example**: `accept-a7b9c3d2e1f4...` instead of `accept-20250927-234936`
 
-2. **Outbox Directory Organization**
+4. **Outbox Directory Organization**
    - **Problem**: Outgoing activities scattered in `static/activities/` with incoming posts
    - **Solution**: Mirror inbox structure with dedicated outbox folders
    - **Structure**: `static/outbox/` with `queue/` subdirectory for delivery
    - **Benefits**: Clear separation, organized file management, future delivery queue
 
-3. **HTTP Signature Verification (CRITICAL)**
-   - **Problem**: Currently accepting activities without authentication (security vulnerability)
-   - **Solution**: Implement RFC 9421 HTTP Signature verification
-   - **Requirements**: Actor public key fetching, signature validation, error handling
-   - **Priority**: Essential before production deployment
-
-4. **Activity Delivery System**
-   - **Problem**: Generated Accept activities not sent to follower inboxes
-   - **Dependencies**: Requires HTTP signature implementation for outgoing signing
-   - **Solution**: POST signed activities to follower inbox endpoints
-   - **Scope**: Complete bidirectional federation capability
-
 **Implementation Notes:**
+- **Testing First**: Always write tests for security-critical code before integration
 - Use existing config system for new directory structures
 - Leverage template system for consistent outgoing activity format
 - Build on existing `generate_activity_id()` pattern for CAS implementation
@@ -226,3 +239,28 @@ ls static/activities/accept-*
 ```
 
 **Current Status**: The server now has **complete follow/unfollow processing** with proper delegation architecture. Next phase focuses on **security hardening** and **production deployment readiness**.
+
+## Recent Progress (2025-10-05)
+
+**HTTP Signatures Implementation (Completed):**
+- ✅ **Implemented `http_signatures.py`** - Complete HTTP signature module following draft-cavage-http-signatures-12 spec
+- ✅ **Signature Verification** - Verifies incoming ActivityPub requests (digest, date, cryptographic signature)
+- ✅ **Signature Signing** - Signs outgoing requests for delivery to remote servers
+- ✅ **Public Key Fetching** - Fetches and caches actor public keys with proper fragment handling
+- ✅ **Configurable Security** - `require_http_signatures` config option (false for dev, true for production)
+- ✅ **Inbox Integration** - Updated inbox endpoint with signature verification
+- ✅ **Documentation** - Added comprehensive explanation of HTTP vs Linked Data signatures in README
+
+**Key Functions:**
+- `verify_request()` - Complete request validation (digest + date + signature)
+- `sign_request()` - Generate HTTP signature for outgoing requests
+- `fetch_actor_public_key()` - Fetch public keys following ActivityPub spec
+- `build_signing_string()` - Construct signing string per draft-cavage-12
+- `compute_digest()` - SHA-256 digest computation for body integrity
+
+**Architecture Decisions:**
+- Custom implementation (no library) - ActivityPub uses old draft spec (draft-cavage-12), not RFC 9421
+- Algorithm `hs2019` per spec (not `rsa-sha256`)
+- Fragment handling: Strip fragment for fetch, match full keyId including fragment
+- Configurable enforcement: Accept unsigned in dev, require in production
+- HTTP signatures only (Linked Data signatures documented for future consideration)

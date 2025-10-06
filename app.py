@@ -137,6 +137,8 @@ def activity(activity_id):
 @app.route(f'/{NAMESPACE}/inbox', methods=['POST'])
 def inbox():
     """Inbox endpoint - receive activities from other servers"""
+    from http_signatures import verify_request
+
     content_type = request.headers.get('Content-Type', '')
 
     # Basic content type validation
@@ -144,6 +146,29 @@ def inbox():
         return jsonify({'error': 'Invalid content type'}), 400
 
     try:
+        # Get raw request body and headers
+        body = request.get_data()
+        headers_dict = dict(request.headers)
+
+        # Check for signature header
+        signature_header = headers_dict.get('Signature')
+        require_signatures = config['security'].get('require_http_signatures', False)
+
+        if signature_header:
+            # Signature present - verify it
+            if not verify_request(signature_header, request.method, request.path, headers_dict, body):
+                print("✗ Invalid signature - rejecting request")
+                return jsonify({'error': 'Invalid signature'}), 401
+            print("✓ Signature verified")
+        elif require_signatures:
+            # No signature but required - reject
+            print("⚠️  No signature and signatures required - rejecting request")
+            return jsonify({'error': 'Signature required'}), 401
+        else:
+            # No signature but not required - accept with warning
+            print("⚠️  Accepting unsigned request (signature verification disabled)")
+
+        # Parse activity (we already have the body)
         activity = request.get_json()
         if not activity or 'type' not in activity:
             return jsonify({'error': 'Invalid activity'}), 400
@@ -154,7 +179,9 @@ def inbox():
         # Queue activity for processing by creating symlink
         queue_activity_for_processing(filename)
 
-        print(f"Received {activity['type']} activity from {activity.get('actor', 'unknown')}")
+        actor = activity.get('actor', 'unknown')
+        verified_status = "✓ verified" if signature_header else "⚠️  unverified"
+        print(f"Received {verified_status} {activity['type']} activity from {actor}")
         return '', 202  # Accepted
 
     except Exception as e:

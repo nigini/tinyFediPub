@@ -1,0 +1,2221 @@
+
+ ▐▛███▜▌   Claude Code v2.0.8
+▝▜█████▛▘  Sonnet 4.5 · Claude Pro
+  ▘▘ ▝▝    /media/DATA/WORKSPACE/SOCIAL_WEB/tinyFedi.pub
+
+> Let's pick things up from where we left: @README.md and @docs/CLAUDE.md 
+  ⎿  Read README.md (224 lines)
+  ⎿  Read docs/CLAUDE.md (228 lines)
+
+● Looking at your project status, you have a solid foundation with:
+
+  ✅ Complete:
+  - ActivityPub server with WebFinger, Actor, Outbox, Inbox, Followers
+  - Follow/Unfollow processing with extensible processor architecture
+  - Template-based entity generation
+  - 43 passing tests with proper isolation
+
+  📋 High Priority TODO:
+  1. Activity ID naming - Switch from timestamps to content hashes (CAS)
+  2. Outbox organization - Dedicated directory structure like inbox
+  3. HTTP signature verification - Critical security requirement
+  4. Activity delivery - Send activities to follower inboxes (needs signatures)
+
+  What would you like to work on next?
+
+> Nice! Let's work on 4 and 3! 
+
+● I'll help you implement HTTP signature verification (3) and activity delivery (4). Since delivery depends on signing, we'll tackle them together.
+
+  Let me create a todo list to track this work:
+
+● Let me explore the current codebase structure to understand what we're working with:
+
+● Search(pattern: "**/*.py")
+  ⎿  Found 12 files (ctrl+o to expand)
+
+● Search(pattern: "signature")
+  ⎿  Found 11 files (ctrl+o to expand)
+
+● Search(pattern: "deliver|delivery")
+  ⎿  Found 7 files (ctrl+o to expand)
+
+● Read(app.py)
+  ⎿  Read 237 lines (ctrl+o to expand)
+
+● Read(activity_processor.py)
+  ⎿  Read 278 lines (ctrl+o to expand)
+
+● Read(config.json.example)
+  ⎿  Read 28 lines (ctrl+o to expand)
+
+● Read(post_utils.py)
+  ⎿  Read 293 lines (ctrl+o to expand)
+
+● Search(pattern: "templates/**/*.j2")
+  ⎿  Found 9 files (ctrl+o to expand)
+
+● Perfect! I've researched the codebase. Here's what I found:
+
+  Current state:
+  - Keys are loaded from config in app.py
+  - Accept activities are generated but not sent (see activity_processor.py:90-91)
+  - All infrastructure exists except signature verification and delivery
+
+  Now I'll implement the HTTP signature system. Since this is a large implementation, I'll break it into logical parts:
+
+  Part 1: HTTP Signature Module - Core Infrastructure
+
+  Let me create the signature verification and signing module:
+
+● Write(http_signatures.py)
+  ⎿  User rejected update to http_signatures.py
+        2    """
+        3    HTTP Signatures for ActivityPub
+        4    
+        5 -  Implements draft-cavage-http-signatures-12 for ActivityPub:
+        5 +  Implements RFC 9421 HTTP Signatures for:
+        6    - Verifying incoming ActivityPub requests
+        7    - Signing outgoing ActivityPub requests
+        8    
+        9    References:
+       10 -  - https://swicg.github.io/activitypub-http-signature/
+       11 -  - https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures-12
+       10 +  - https://datatracker.ietf.org/doc/html/rfc9421
+       11 +  - https://www.w3.org/wiki/SocialCG/ActivityPub/Authentication_Authorization
+       12    """
+       13    
+       14    import base64
+     ...
+        30    CACHE_TTL = 3600  # 1 hour
+        31    
+        32    
+        33 -  def parse_signature_header(signature_header: str) -> Dict[str, str]:
+        33 +  def fetch_actor_public_key(actor_url: str) -> Optional[str]:
+        34        """
+        35 -      Parse HTTP Signature header into components
+        35 +      Fetch actor's public key from their ActivityPub actor endpoint
+        36    
+        37        Args:
+        38 -          signature_header: Raw Signature header value
+        39 -              Example: 'keyId="https://example.com/actor#main-key",headers="(request-target) host date",signature="..."'
+        38 +          actor_url: URL of the actor (e.g., 'https://mastodon.social/users/alice')
+        39    
+        40        Returns:
+        41 -          dict: Parsed signature components (keyId, headers, signature, algorithm)
+        42 -      """
+        43 -      components = {}
+        44 -  
+        45 -      # Parse header format: keyId="...",headers="...",signature="..."
+        46 -      pattern = r'(\w+)="([^"]*)"'
+        47 -      matches = re.findall(pattern, signature_header)
+        48 -  
+        49 -      for key, value in matches:
+        50 -          components[key] = value
+        51 -  
+        52 -      return components
+        53 -  
+        54 -  
+        55 -  def fetch_actor_public_key(key_id: str) -> Optional[str]:
+        56 -      """
+        57 -      Fetch actor's public key from keyId following ActivityPub spec
+        58 -  
+        59 -      Per spec: https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
+        60 -      1. Strip fragment from keyId before fetching
+        61 -      2. Fetch actor document
+        62 -      3. Find publicKey object whose id matches original keyId (with fragment)
+        63 -      4. Extract publicKeyPem
+        64 -  
+        65 -      Args:
+        66 -          key_id: Full keyId URL (may include fragment, e.g., 'https://example.com/actor#main-key')
+        67 -  
+        68 -      Returns:
+        41            str: PEM-formatted public key, or None if fetch fails
+        42        """
+        43        # Check cache first
+        44 -      if key_id in _ACTOR_KEY_CACHE:
+        45 -          cached_key, cached_time = _ACTOR_KEY_CACHE[key_id]
+        44 +      if actor_url in _ACTOR_KEY_CACHE:
+        45 +          cached_key, cached_time = _ACTOR_KEY_CACHE[actor_url]
+        46            if datetime.now().timestamp() - cached_time < CACHE_TTL:
+        47                return cached_key
+        48    
+        49        try:
+        50 -          # Strip fragment identifier for fetching
+        51 -          parsed = urlparse(key_id)
+        52 -          fetch_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        53 -          if parsed.query:
+        54 -              fetch_url += f"?{parsed.query}"
+        55 -  
+        50            # Fetch actor document with ActivityPub headers
+        51            headers = {
+        52                'Accept': 'application/activity+json, application/ld+json',
+        53                'User-Agent': 'TinyFedi/1.0'
+        54            }
+        55    
+        56 -          response = requests.get(fetch_url, headers=headers, timeout=10)
+        56 +          response = requests.get(actor_url, headers=headers, timeout=10)
+        57            response.raise_for_status()
+        58 +  
+        59            actor_data = response.json()
+        60    
+        61 -          # Extract public key - can be object or array
+        62 -          public_key_data = actor_data.get('publicKey')
+        63 -          if not public_key_data:
+        64 -              print(f"Warning: No publicKey in actor document for {key_id}")
+        65 -              return None
+        61 +          # Extract public key from actor document
+        62 +          # Standard location: actor.publicKey.publicKeyPem
+        63 +          if 'publicKey' in actor_data:
+        64 +              public_key_pem = actor_data['publicKey'].get('publicKeyPem')
+        65 +              if public_key_pem:
+        66 +                  # Cache the key
+        67 +                  _ACTOR_KEY_CACHE[actor_url] = (public_key_pem, datetime.now().timestamp())
+        68 +                  return public_key_pem
+        69    
+        70 -          # Handle both single object and array formats
+        71 -          keys_to_check = public_key_data if isinstance(public_key_data, list) else [public_key_data]
+        72 -  
+        73 -          # Find key whose id matches original keyId (including fragment)
+        74 -          for key_obj in keys_to_check:
+        75 -              # Handle both expanded objects and compacted IDs
+        76 -              if isinstance(key_obj, dict):
+        77 -                  if key_obj.get('id') == key_id:
+        78 -                      public_key_pem = key_obj.get('publicKeyPem')
+        79 -                      if public_key_pem:
+        80 -                          # Cache the key
+        81 -                          _ACTOR_KEY_CACHE[key_id] = (public_key_pem, datetime.now().timestamp())
+        82 -                          return public_key_pem
+        83 -  
+        84 -          print(f"Warning: No matching publicKey found for {key_id}")
+        70 +          print(f"Warning: No publicKey found in actor document for {actor_url}")
+        71            return None
+        72    
+        73        except Exception as e:
+        74 -          print(f"Error fetching public key for {key_id}: {e}")
+        74 +          print(f"Error fetching actor public key from {actor_url}: {e}")
+        75            return None
+        76    
+        77    
+        78 -  def build_signing_string(headers_to_sign: str, method: str, path: str, headers: Dict[str, str]) -> str:
+        78 +  def parse_signature_header(signature_header: str) -> Dict[str, str]:
+        79        """
+        80 -      Build the signing string from request components
+        80 +      Parse HTTP Signature header into components
+        81    
+        82 -      Per spec: https://swicg.github.io/activitypub-http-signature/#signing-string
+        83 -      Format: "header-name: header-value\nheader-name: header-value\n..."
+        84 -  
+        82        Args:
+        83 -          headers_to_sign: Space-separated list of headers (e.g., "(request-target) host date digest")
+        84 -          method: HTTP method (e.g., "POST")
+        85 -          path: Request path (e.g., "/activitypub/inbox")
+        86 -          headers: Dict of HTTP headers from the request
+        83 +          signature_header: Raw Signature header value
+        84    
+        85        Returns:
+        86 -          str: Signing string ready for signature verification
+        86 +          dict: Parsed signature components (keyId, headers, signature, algorithm)
+        87        """
+        88 -      header_list = headers_to_sign.split()
+        89 -      signing_parts = []
+        88 +      components = {}
+        89    
+        90 -      for header_name in header_list:
+        91 -          if header_name == '(request-target)':
+        92 -              # Special pseudo-header: "post /activitypub/inbox"
+        93 -              target = f"{method.lower()} {path}"
+        94 -              signing_parts.append(f"(request-target): {target}")
+        95 -          else:
+        96 -              # Regular header - use lowercase name
+        97 -              header_value = headers.get(header_name) or headers.get(header_name.lower()) or headers.get(header_name.title())
+        98 -              if header_value:
+        99 -                  signing_parts.append(f"{header_name.lower()}: {header_value}")
+       100 -              else:
+       101 -                  # Header not found - signature will fail
+       102 -                  print(f"Warning: Header '{header_name}' not found in request")
+       103 -                  signing_parts.append(f"{header_name.lower()}: ")
+        90 +      # Parse header format: keyId="...",headers="...",signature="..."
+        91 +      pattern = r'(\w+)="([^"]*)"'
+        92 +      matches = re.findall(pattern, signature_header)
+        93    
+        94 -      return '\n'.join(signing_parts)
+        94 +      for key, value in matches:
+        95 +          components[key] = value
+        96    
+        97 -  
+        98 -  def compute_digest(body: bytes) -> str:
+        99 -      """
+       100 -      Compute SHA-256 digest of request body
+       101 -  
+       102 -      Per spec: Digest header format is "SHA-256=base64(sha256(body))"
+       103 -  
+       104 -      Args:
+       105 -          body: Request body as bytes
+       106 -  
+       107 -      Returns:
+       108 -          str: Digest header value (e.g., "SHA-256=abc123...")
+       109 -      """
+       110 -      hash_obj = hashlib.sha256(body)
+       111 -      digest_b64 = base64.b64encode(hash_obj.digest()).decode('utf-8')
+       112 -      return f"SHA-256={digest_b64}"
+       113 -  
+       114 -  
+       115 -  def verify_signature(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+       116 -      """
+       117 -      Verify HTTP signature on incoming request
+       118 -  
+       119 -      Args:
+       120 -          signature_header: Value of the Signature header
+       121 -          method: HTTP method (e.g., "POST")
+       122 -          path: Request path (e.g., "/activitypub/inbox")
+       123 -          headers: Dict of request headers
+       124 -          body: Request body as bytes
+       125 -  
+       126 -      Returns:
+       127 -          bool: True if signature is valid, False otherwise
+       128 -      """
+       129 -      try:
+       130 -          # Parse signature header
+       131 -          sig_components = parse_signature_header(signature_header)
+       132 -  
+       133 -          key_id = sig_components.get('keyId')
+       134 -          signature_b64 = sig_components.get('signature')
+       135 -          headers_to_sign = sig_components.get('headers', '(request-target) host date')
+       136 -  
+       137 -          if not key_id or not signature_b64:
+       138 -              print("Error: Missing keyId or signature in Signature header")
+       139 -              return False
+       140 -  
+       141 -          # Fetch the public key
+       142 -          public_key_pem = fetch_actor_public_key(key_id)
+       143 -          if not public_key_pem:
+       144 -              print(f"Error: Could not fetch public key for {key_id}")
+       145 -              return False
+       146 -  
+       147 -          # Build signing string
+       148 -          signing_string = build_signing_string(headers_to_sign, method, path, headers)
+       149 -  
+       150 -          # Decode signature
+       151 -          signature_bytes = base64.b64decode(signature_b64)
+       152 -  
+       153 -          # Load public key
+       154 -          public_key = serialization.load_pem_public_key(
+       155 -              public_key_pem.encode('utf-8'),
+       156 -              backend=default_backend()
+       157 -          )
+       158 -  
+       159 -          # Verify signature using RSA-SHA256
+       160 -          public_key.verify(
+       161 -              signature_bytes,
+       162 -              signing_string.encode('utf-8'),
+       163 -              padding.PKCS1v15(),
+       164 -              hashes.SHA256()
+       165 -          )
+       166 -  
+       167 -          # If we get here, signature is valid
+       168 -          print(f"✓ Signature verified for {key_id}")
+       169 -          return True
+       170 -  
+       171 -      except Exception as e:
+       172 -          print(f"Signature verification failed: {e}")
+       173 -          return False
+       174 -  
+       175 -  
+       176 -  def sign_request(method: str, path: str, headers: Dict[str, str], body: bytes, private_key_pem: str, key_id: str) -> str:
+       177 -      """
+       178 -      Generate HTTP signature for outgoing request
+       179 -  
+       180 -      Args:
+       181 -          method: HTTP method (e.g., "POST")
+       182 -          path: Request path (e.g., "/inbox")
+       183 -          headers: Dict of headers to include in request
+       184 -          body: Request body as bytes
+       185 -          private_key_pem: Your private key (PEM format)
+       186 -          key_id: Your public key ID URL (e.g., "https://yourdomain.com/activitypub/actor#main-key")
+       187 -  
+       188 -      Returns:
+       189 -          str: Signature header value to add to request
+       190 -      """
+       191 -      try:
+       192 -          # Compute digest of body
+       193 -          digest = compute_digest(body)
+       194 -          headers['digest'] = digest
+       195 -  
+       196 -          # Headers to sign (per ActivityPub spec)
+       197 -          headers_to_sign = '(request-target) host date digest content-type'
+       198 -  
+       199 -          # Build signing string
+       200 -          signing_string = build_signing_string(headers_to_sign, method, path, headers)
+       201 -  
+       202 -          # Load private key
+       203 -          private_key = serialization.load_pem_private_key(
+       204 -              private_key_pem.encode('utf-8'),
+       205 -              password=None,
+       206 -              backend=default_backend()
+       207 -          )
+       208 -  
+       209 -          # Sign the string using RSA-SHA256
+       210 -          signature_bytes = private_key.sign(
+       211 -              signing_string.encode('utf-8'),
+       212 -              padding.PKCS1v15(),
+       213 -              hashes.SHA256()
+       214 -          )
+       215 -  
+       216 -          # Encode signature as base64
+       217 -          signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
+       218 -  
+       219 -          # Build Signature header
+       220 -          signature_header = f'keyId="{key_id}",algorithm="hs2019",headers="{headers_to_sign}",signature="{signature_b64}"'
+       221 -  
+       222 -          return signature_header
+       223 -  
+       224 -      except Exception as e:
+       225 -          print(f"Error signing request: {e}")
+       226 -          raise
+       227 -  
+       228 -  
+       229 -  def verify_digest(digest_header: str, body: bytes) -> bool:
+       230 -      """
+       231 -      Verify that Digest header matches the request body
+       232 -  
+       233 -      Args:
+       234 -          digest_header: Value of Digest header (e.g., "SHA-256=abc123...")
+       235 -          body: Request body as bytes
+       236 -  
+       237 -      Returns:
+       238 -          bool: True if digest matches, False otherwise
+       239 -      """
+       240 -      try:
+       241 -          # Compute expected digest
+       242 -          expected_digest = compute_digest(body)
+       243 -  
+       244 -          # Compare (case-sensitive)
+       245 -          if digest_header == expected_digest:
+       246 -              return True
+       247 -          else:
+       248 -              print(f"Digest mismatch: expected {expected_digest}, got {digest_header}")
+       249 -              return False
+       250 -  
+       251 -      except Exception as e:
+       252 -          print(f"Error verifying digest: {e}")
+       253 -          return False
+       254 -  
+       255 -  
+       256 -  def verify_date(date_header: str, max_age_seconds: int = 300) -> bool:
+       257 -      """
+       258 -      Verify that Date header is within acceptable time window
+       259 -  
+       260 -      Prevents replay attacks by rejecting old requests
+       261 -  
+       262 -      Args:
+       263 -          date_header: Value of Date header (RFC 2616 format)
+       264 -          max_age_seconds: Maximum age in seconds (default 5 minutes)
+       265 -  
+       266 -      Returns:
+       267 -          bool: True if date is valid, False otherwise
+       268 -      """
+       269 -      try:
+       270 -          from email.utils import parsedate_to_datetime
+       271 -  
+       272 -          request_time = parsedate_to_datetime(date_header)
+       273 -          current_time = datetime.now(timezone.utc)
+       274 -  
+       275 -          # Calculate age
+       276 -          age = (current_time - request_time).total_seconds()
+       277 -  
+       278 -          # Check if within acceptable range (allow some clock skew in both directions)
+       279 -          if abs(age) <= max_age_seconds:
+       280 -              return True
+       281 -          else:
+       282 -              print(f"Date too old/new: {age} seconds (max {max_age_seconds})")
+       283 -              return False
+       284 -  
+       285 -      except Exception as e:
+       286 -          print(f"Error parsing date header: {e}")
+       287 -          return False
+       288 -  
+       289 -  
+       290 -  def verify_request(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+       291 -      """
+       292 -      Complete verification of incoming ActivityPub request
+       293 -  
+       294 -      Performs:
+       295 -      1. Digest verification (body matches Digest header)
+       296 -      2. Date verification (request is recent)
+       297 -      3. Signature verification (cryptographic validation)
+       298 -  
+       299 -      Args:
+       300 -          signature_header: Value of the Signature header
+       301 -          method: HTTP method (e.g., "POST")
+       302 -          path: Request path (e.g., "/activitypub/inbox")
+       303 -          headers: Dict of request headers
+       304 -          body: Request body as bytes
+       305 -  
+       306 -      Returns:
+       307 -          bool: True if all checks pass, False otherwise
+       308 -      """
+       309 -      # Step 1: Verify digest
+       310 -      digest_header = headers.get('digest') or headers.get('Digest')
+       311 -      if digest_header:
+       312 -          if not verify_digest(digest_header, body):
+       313 -              print("✗ Digest verification failed")
+       314 -              return False
+       315 -      else:
+       316 -          print("Warning: No Digest header present")
+       317 -  
+       318 -      # Step 2: Verify date
+       319 -      date_header = headers.get('date') or headers.get('Date')
+       320 -      if date_header:
+       321 -          if not verify_date(date_header):
+       322 -              print("✗ Date verification failed")
+       323 -              return False
+       324 -      else:
+       325 -          print("Warning: No Date header present")
+       326 -  
+       327 -      # Step 3: Verify signature
+       328 -      if not verify_signature(signature_header, method, path, headers, body):
+       329 -          print("✗ Signature verification failed")
+       330 -          return False
+       331 -  
+       332 -      print("✓ Request verification passed")
+       333 -      return True
+        97 +      return components
+
+> what is "parse_signature_header" doing? what are the use cases - and where are them defined? 
+
+● Good question! Let me explain the HTTP Signature flow:
+
+  What parse_signature_header does
+
+  When a Mastodon server sends a Follow request to your inbox, the HTTP request includes a Signature header like this:
+
+  Signature: keyId="https://mastodon.social/users/alice#main-key",headers="(request-target) host date digest content-type",signature="Base64EncodedSignature==",algorithm="rsa-sha256"
+
+  parse_signature_header extracts these components into a dict:
+  {
+    'keyId': 'https://mastodon.social/users/alice#main-key',
+    'headers': '(request-target) host date digest content-type',
+    'signature': 'Base64EncodedSignature==',
+    'algorithm': 'rsa-sha256'
+  }
+
+  Use Cases
+
+  Incoming (Verification):
+  1. Parse the Signature header
+  2. Fetch the public key from keyId URL
+  3. Reconstruct the signed string from listed headers
+  4. Verify the signature matches using the public key
+
+  Outgoing (Signing):
+  1. Create signature over specific headers (date, digest, etc.)
+  2. Format as Signature header
+  3. Include in POST to follower's inbox
+
+  Where it's defined
+
+  - Spec: https://datatracker.ietf.org/doc/html/rfc9421
+  - ActivityPub context: https://www.w3.org/wiki/SocialCG/ActivityPub/Authentication_Authorization
+  - Real-world: Used by Mastodon, Pleroma, Pixelfed, etc. to verify federated activities
+
+  Should I proceed with this implementation approach, or would you like a different design?
+
+> yes 
+
+● Great! I'll proceed with the implementation. Breaking it into logical chunks:
+
+  Part 1: Core Infrastructure & Parsing (~50 lines)
+
+● Write(http_signatures.py)
+  ⎿  Wrote 54 lines to http_signatures.py           
+     #!/usr/bin/env python3
+     """
+     HTTP Signatures for ActivityPub
+     Implements RFC 9421 HTTP Signatures for:
+     - Verifying incoming ActivityPub requests
+     - Signing outgoing ActivityPub requests
+     References:
+     - https://datatracker.ietf.org/doc/html/rfc9421
+     … +44 lines (ctrl+o to expand)
+
+● Part 2: Actor Public Key Fetching (~45 lines)
+
+● Update(http_signatures.py)
+  ⎿  User rejected update to http_signatures.py
+        53        return components
+        54    
+        55    
+        56 +  def fetch_actor_public_key(actor_url: str) -> Optional[str]:
+        57 +      """
+        58 +      Fetch actor's public key from their ActivityPub actor endpoint
+        59 +  
+        60 +      Args:
+        61 +          actor_url: URL of the actor (e.g., 'https://mastodon.social/users/alice')
+        62 +  
+        63 +      Returns:
+        64 +          str: PEM-formatted public key, or None if fetch fails
+        65 +      """
+        66 +      # Check cache first
+        67 +      if actor_url in _ACTOR_KEY_CACHE:
+        68 +          cached_key, cached_time = _ACTOR_KEY_CACHE[actor_url]
+        69 +          if datetime.now().timestamp() - cached_time < CACHE_TTL:
+        70 +              return cached_key
+        71 +  
+        72 +      try:
+        73 +          # Fetch actor document with ActivityPub headers
+        74 +          headers = {
+        75 +              'Accept': 'application/activity+json, application/ld+json',
+        76 +              'User-Agent': 'TinyFedi/1.0'
+        77 +          }
+        78 +  
+        79 +          response = requests.get(actor_url, headers=headers, timeout=10)
+        80 +          response.raise_for_status()
+        81 +  
+        82 +          actor_data = response.json()
+        83 +  
+        84 +          # Extract public key from actor document
+        85 +          # Standard location: actor.publicKey.publicKeyPem
+        86 +          if 'publicKey' in actor_data:
+        87 +              public_key_pem = actor_data['publicKey'].get('publicKeyPem')
+        88 +              if public_key_pem:
+        89 +                  # Cache the key
+        90 +                  _ACTOR_KEY_CACHE[actor_url] = (public_key_pem, datetime.now().timestamp())
+        91 +                  return public_key_pem
+        92 +  
+        93 +          print(f"Warning: No publicKey found in actor document for {actor_url}")
+        94 +          return None
+        95 +  
+        96 +      except Exception as e:
+        97 +          print(f"Error fetching actor public key from {actor_url}: {e}")
+        98 +          return None
+        99 +  
+       100 +  
+       101    def fetch_actor_public_key(key_id: str) -> Optional[str]:
+       102        """
+       103        Fetch actor's public key from keyId following ActivityPub spec
+
+> Could you double check that we are using the most current spec? Here is a session defining just that: 
+https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key 
+
+● Fetch(https://swicg.github.io/activitypub-http-signature/)
+  ⎿  Received 29.7KB (200 OK)
+
+● Fetch(https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key)
+  ⎿  Received 29.7KB (200 OK)
+
+● Excellent catch! The ActivityPub ecosystem uses draft-cavage-http-signatures-12, not RFC 9421. Key differences:
+
+  1. Algorithm: Use hs2019 (not rsa-sha256)
+  2. KeyId handling: Must strip fragment, then match full keyId including fragment
+  3. PublicKey structure: Can be single object or array
+  4. Required headers: (request-target), host, date, digest, content-type
+
+  Let me update the implementation to match the actual spec:
+
+● Update(http_signatures.py)
+  ⎿  Updated http_signatures.py with 3 additions and 3 removals                         
+        2    """
+        3    HTTP Signatures for ActivityPub
+        4    
+        5 -  Implements RFC 9421 HTTP Signatures for:
+        5 +  Implements draft-cavage-http-signatures-12 for ActivityPub:
+        6    - Verifying incoming ActivityPub requests
+        7    - Signing outgoing ActivityPub requests
+        8    
+        9    References:
+       10 -  - https://datatracker.ietf.org/doc/html/rfc9421
+       11 -  - https://www.w3.org/wiki/SocialCG/ActivityPub/Authentication_Authorization
+       10 +  - https://swicg.github.io/activitypub-http-signature/
+       11 +  - https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures-12
+       12    """
+       13    
+       14    import base64
+
+● Now continuing with the corrected implementation:
+
+● Update(http_signatures.py)
+  ⎿  Updated http_signatures.py with 67 additions                                                                     
+        51            components[key] = value
+        52    
+        53        return components
+        54 +  
+        55 +  
+        56 +  def fetch_actor_public_key(key_id: str) -> Optional[str]:
+        57 +      """
+        58 +      Fetch actor's public key from keyId following ActivityPub spec
+        59 +  
+        60 +      Per spec: https://swicg.github.io/activitypub-http-signature/#how-to-obtain-a-signature-s-public-key
+        61 +      1. Strip fragment from keyId before fetching
+        62 +      2. Fetch actor document
+        63 +      3. Find publicKey object whose id matches original keyId (with fragment)
+        64 +      4. Extract publicKeyPem
+        65 +  
+        66 +      Args:
+        67 +          key_id: Full keyId URL (may include fragment, e.g., 'https://example.com/actor#main-key')
+        68 +  
+        69 +      Returns:
+        70 +          str: PEM-formatted public key, or None if fetch fails
+        71 +      """
+        72 +      # Check cache first
+        73 +      if key_id in _ACTOR_KEY_CACHE:
+        74 +          cached_key, cached_time = _ACTOR_KEY_CACHE[key_id]
+        75 +          if datetime.now().timestamp() - cached_time < CACHE_TTL:
+        76 +              return cached_key
+        77 +  
+        78 +      try:
+        79 +          # Strip fragment identifier for fetching
+        80 +          parsed = urlparse(key_id)
+        81 +          fetch_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        82 +          if parsed.query:
+        83 +              fetch_url += f"?{parsed.query}"
+        84 +  
+        85 +          # Fetch actor document with ActivityPub headers
+        86 +          headers = {
+        87 +              'Accept': 'application/activity+json, application/ld+json',
+        88 +              'User-Agent': 'TinyFedi/1.0'
+        89 +          }
+        90 +  
+        91 +          response = requests.get(fetch_url, headers=headers, timeout=10)
+        92 +          response.raise_for_status()
+        93 +          actor_data = response.json()
+        94 +  
+        95 +          # Extract public key - can be object or array
+        96 +          public_key_data = actor_data.get('publicKey')
+        97 +          if not public_key_data:
+        98 +              print(f"Warning: No publicKey in actor document for {key_id}")
+        99 +              return None
+       100 +  
+       101 +          # Handle both single object and array formats
+       102 +          keys_to_check = public_key_data if isinstance(public_key_data, list) else [public_key_data]
+       103 +  
+       104 +          # Find key whose id matches original keyId (including fragment)
+       105 +          for key_obj in keys_to_check:
+       106 +              # Handle both expanded objects and compacted IDs
+       107 +              if isinstance(key_obj, dict):
+       108 +                  if key_obj.get('id') == key_id:
+       109 +                      public_key_pem = key_obj.get('publicKeyPem')
+       110 +                      if public_key_pem:
+       111 +                          # Cache the key
+       112 +                          _ACTOR_KEY_CACHE[key_id] = (public_key_pem, datetime.now().timestamp())
+       113 +                          return public_key_pem
+       114 +  
+       115 +          print(f"Warning: No matching publicKey found for {key_id}")
+       116 +          return None
+       117 +  
+       118 +      except Exception as e:
+       119 +          print(f"Error fetching public key for {key_id}: {e}")
+       120 +          return None
+
+● Part 3: Signature String Construction (~50 lines)
+
+● Update(http_signatures.py)
+  ⎿  User rejected update to http_signatures.py
+       174        return f"SHA-256={digest_b64}"
+       175    
+       176    
+       177 +  def build_signing_string(headers_to_sign: str, method: str, path: str, headers: Dict[str, str]) -> str:
+       178 +      """
+       179 +      Build the signing string from request components
+       180 +  
+       181 +      Per spec: https://swicg.github.io/activitypub-http-signature/#signing-string
+       182 +      Format: "header-name: header-value\nheader-name: header-value\n..."
+       183 +  
+       184 +      Args:
+       185 +          headers_to_sign: Space-separated list of headers (e.g., "(request-target) host date digest")
+       186 +          method: HTTP method (e.g., "POST")
+       187 +          path: Request path (e.g., "/activitypub/inbox")
+       188 +          headers: Dict of HTTP headers from the request
+       189 +  
+       190 +      Returns:
+       191 +          str: Signing string ready for signature verification
+       192 +      """
+       193 +      header_list = headers_to_sign.split()
+       194 +      signing_parts = []
+       195 +  
+       196 +      for header_name in header_list:
+       197 +          if header_name == '(request-target)':
+       198 +              # Special pseudo-header: "post /activitypub/inbox"
+       199 +              target = f"{method.lower()} {path}"
+       200 +              signing_parts.append(f"(request-target): {target}")
+       201 +          else:
+       202 +              # Regular header - use lowercase name
+       203 +              header_value = headers.get(header_name) or headers.get(header_name.lower()) or headers.get(header_name.title())
+       204 +              if header_value:
+       205 +                  signing_parts.append(f"{header_name.lower()}: {header_value}")
+       206 +              else:
+       207 +                  # Header not found - signature will fail
+       208 +                  print(f"Warning: Header '{header_name}' not found in request")
+       209 +                  signing_parts.append(f"{header_name.lower()}: ")
+       210 +  
+       211 +      return '\n'.join(signing_parts)
+       212 +  
+       213 +  
+       214 +  def compute_digest(body: bytes) -> str:
+       215 +      """
+       216 +      Compute SHA-256 digest of request body
+       217 +  
+       218 +      Per spec: Digest header format is "SHA-256=base64(sha256(body))"
+       219 +  
+       220 +      Args:
+       221 +          body: Request body as bytes
+       222 +  
+       223 +      Returns:
+       224 +          str: Digest header value (e.g., "SHA-256=abc123...")
+       225 +      """
+       226 +      hash_obj = hashlib.sha256(body)
+       227 +      digest_b64 = base64.b64encode(hash_obj.digest()).decode('utf-8')
+       228 +      return f"SHA-256={digest_b64}"
+       229 +  
+       230 +  
+       231    def verify_signature(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+       232        """
+       233        Verify HTTP signature on incoming request
+
+> do you have a way to show me these code patches with syntax highlights? 
+
+● I don't have syntax highlighting in my responses, but I can help you view them better! A few options:
+
+  Option 1: View in your terminal with git
+  git diff http_signatures.py
+  This will show colored diffs if you have git configured with colors.
+
+  Option 2: I can show complete functions
+  Instead of showing patches, I can show you each complete function with proper markdown formatting:
+
+  def fetch_actor_public_key(key_id: str) -> Optional[str]:
+      """Fetch actor's public key from keyId..."""
+      # ... full function here
+
+  Option 3: Use a diff tool
+  After I make changes, you can run:
+  git diff --color-words http_signatures.py
+
+  My recommendation: Let me just write the entire module in logical sections, and after each section I'll show you the complete function so you can review it with proper formatting. Then
+   you can review the final file with git diff or your editor.
+
+  Would you like me to proceed that way? I'll show each function completely before moving to the next one.
+
+> let's use option 2 
+
+● Perfect! Let me show you each function completely with syntax highlighting, then add it to the file.
+
+  Part 3: Building the Signing String
+
+  Here's the function that constructs the string that gets signed:
+
+  def build_signing_string(headers_to_sign: str, method: str, path: str, headers: Dict[str, str]) -> str:
+      """
+      Build the signing string from request components
+
+      Per spec: https://swicg.github.io/activitypub-http-signature/#signing-string
+      Format: "header-name: header-value\nheader-name: header-value\n..."
+
+      Args:
+          headers_to_sign: Space-separated list of headers (e.g., "(request-target) host date digest")
+          method: HTTP method (e.g., "POST")
+          path: Request path (e.g., "/activitypub/inbox")
+          headers: Dict of HTTP headers from the request
+
+      Returns:
+          str: Signing string ready for signature verification
+      """
+      header_list = headers_to_sign.split()
+      signing_parts = []
+
+      for header_name in header_list:
+          if header_name == '(request-target)':
+              # Special pseudo-header: "post /activitypub/inbox"
+              target = f"{method.lower()} {path}"
+              signing_parts.append(f"(request-target): {target}")
+          else:
+              # Regular header - use lowercase name
+              header_value = headers.get(header_name) or headers.get(header_name.lower()) or headers.get(header_name.title())
+              if header_value:
+                  signing_parts.append(f"{header_name.lower()}: {header_value}")
+              else:
+                  # Header not found - signature will fail
+                  print(f"Warning: Header '{header_name}' not found in request")
+                  signing_parts.append(f"{header_name.lower()}: ")
+
+      return '\n'.join(signing_parts)
+
+  Ready for next function?
+
+> yes 
+
+● Part 4: Computing Digest
+
+  Here's the function that creates the SHA-256 digest of the request body:
+
+  def compute_digest(body: bytes) -> str:
+      """
+      Compute SHA-256 digest of request body
+
+      Per spec: Digest header format is "SHA-256=base64(sha256(body))"
+
+      Args:
+          body: Request body as bytes
+
+      Returns:
+          str: Digest header value (e.g., "SHA-256=abc123...")
+      """
+      hash_obj = hashlib.sha256(body)
+      digest_b64 = base64.b64encode(hash_obj.digest()).decode('utf-8')
+      return f"SHA-256={digest_b64}"
+
+  This is used both for:
+  - Incoming: Verify the Digest header matches the actual body
+  - Outgoing: Generate the Digest header when signing requests
+
+  Ready for next?
+
+> perfect 
+
+● Part 5: Signature Verification
+
+  Here's the core function that verifies an incoming signature:
+
+  def verify_signature(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+      """
+      Verify HTTP signature on incoming request
+
+      Args:
+          signature_header: Value of the Signature header
+          method: HTTP method (e.g., "POST")
+          path: Request path (e.g., "/activitypub/inbox")
+          headers: Dict of request headers
+          body: Request body as bytes
+
+      Returns:
+          bool: True if signature is valid, False otherwise
+      """
+      try:
+          # Parse signature header
+          sig_components = parse_signature_header(signature_header)
+
+          key_id = sig_components.get('keyId')
+          signature_b64 = sig_components.get('signature')
+          headers_to_sign = sig_components.get('headers', '(request-target) host date')
+
+          if not key_id or not signature_b64:
+              print("Error: Missing keyId or signature in Signature header")
+              return False
+
+          # Fetch the public key
+          public_key_pem = fetch_actor_public_key(key_id)
+          if not public_key_pem:
+              print(f"Error: Could not fetch public key for {key_id}")
+              return False
+
+          # Build signing string
+          signing_string = build_signing_string(headers_to_sign, method, path, headers)
+
+          # Decode signature
+          signature_bytes = base64.b64decode(signature_b64)
+
+          # Load public key
+          public_key = serialization.load_pem_public_key(
+              public_key_pem.encode('utf-8'),
+              backend=default_backend()
+          )
+
+          # Verify signature using RSA-SHA256
+          public_key.verify(
+              signature_bytes,
+              signing_string.encode('utf-8'),
+              padding.PKCS1v15(),
+              hashes.SHA256()
+          )
+
+          # If we get here, signature is valid
+          print(f"✓ Signature verified for {key_id}")
+          return True
+
+      except Exception as e:
+          print(f"Signature verification failed: {e}")
+          return False
+
+  This verifies that the request actually came from who it claims to be from.
+
+  Ready for next?
+
+> wow! that is convoluted! (when you finish the implementation, I want help with learning all these steps!) let's go to the next one! 
+
+● Haha yes! HTTP signatures are definitely complex. I'll help you understand all the steps once we're done - it's actually a clever cryptographic handshake!
+
+  Part 6: Signing Outgoing Requests
+
+  Here's the function that signs YOUR outgoing requests to other servers:
+
+  def sign_request(method: str, path: str, headers: Dict[str, str], body: bytes, private_key_pem: str, key_id: str) -> str:
+      """
+      Generate HTTP signature for outgoing request
+
+      Args:
+          method: HTTP method (e.g., "POST")
+          path: Request path (e.g., "/inbox")
+          headers: Dict of headers to include in request
+          body: Request body as bytes
+          private_key_pem: Your private key (PEM format)
+          key_id: Your public key ID URL (e.g., "https://yourdomain.com/activitypub/actor#main-key")
+
+      Returns:
+          str: Signature header value to add to request
+      """
+      try:
+          # Compute digest of body
+          digest = compute_digest(body)
+          headers['digest'] = digest
+
+          # Headers to sign (per ActivityPub spec)
+          headers_to_sign = '(request-target) host date digest content-type'
+
+          # Build signing string
+          signing_string = build_signing_string(headers_to_sign, method, path, headers)
+
+          # Load private key
+          private_key = serialization.load_pem_private_key(
+              private_key_pem.encode('utf-8'),
+              password=None,
+              backend=default_backend()
+          )
+
+          # Sign the string using RSA-SHA256
+          signature_bytes = private_key.sign(
+              signing_string.encode('utf-8'),
+              padding.PKCS1v15(),
+              hashes.SHA256()
+          )
+
+          # Encode signature as base64
+          signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
+
+          # Build Signature header
+          signature_header = f'keyId="{key_id}",algorithm="hs2019",headers="{headers_to_sign}",signature="{signature_b64}"'
+
+          return signature_header
+
+      except Exception as e:
+          print(f"Error signing request: {e}")
+          raise
+
+  This creates the Signature header that proves to other servers that YOU sent the request.
+
+  Ready for the final helper functions?
+
+> nice. go on! 
+
+● Part 7: Additional Verification Helpers
+
+  Here are the helper functions for digest and date validation:
+
+  def verify_digest(digest_header: str, body: bytes) -> bool:
+      """
+      Verify that Digest header matches the request body
+
+      Args:
+          digest_header: Value of Digest header (e.g., "SHA-256=abc123...")
+          body: Request body as bytes
+
+      Returns:
+          bool: True if digest matches, False otherwise
+      """
+      try:
+          # Compute expected digest
+          expected_digest = compute_digest(body)
+
+          # Compare (case-sensitive)
+          if digest_header == expected_digest:
+              return True
+          else:
+              print(f"Digest mismatch: expected {expected_digest}, got {digest_header}")
+              return False
+
+      except Exception as e:
+          print(f"Error verifying digest: {e}")
+          return False
+
+
+  def verify_date(date_header: str, max_age_seconds: int = 300) -> bool:
+      """
+      Verify that Date header is within acceptable time window
+      
+      Prevents replay attacks by rejecting old requests
+
+      Args:
+          date_header: Value of Date header (RFC 2616 format)
+          max_age_seconds: Maximum age in seconds (default 5 minutes)
+
+      Returns:
+          bool: True if date is valid, False otherwise
+      """
+      try:
+          from email.utils import parsedate_to_datetime
+
+          request_time = parsedate_to_datetime(date_header)
+          current_time = datetime.now(timezone.utc)
+
+          # Calculate age
+          age = (current_time - request_time).total_seconds()
+
+          # Check if within acceptable range (allow some clock skew in both directions)
+          if abs(age) <= max_age_seconds:
+              return True
+          else:
+              print(f"Date too old/new: {age} seconds (max {max_age_seconds})")
+              return False
+
+      except Exception as e:
+          print(f"Error parsing date header: {e}")
+          return False
+
+  Ready for the final convenience function that ties it all together?
+
+> go on! 
+
+● Part 8: Complete Verification Function
+
+  Here's the high-level function that does complete request validation:
+
+  def verify_request(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+      """
+      Complete verification of incoming ActivityPub request
+      
+      Performs:
+      1. Digest verification (body matches Digest header)
+      2. Date verification (request is recent)
+      3. Signature verification (cryptographic validation)
+
+      Args:
+          signature_header: Value of the Signature header
+          method: HTTP method (e.g., "POST")
+          path: Request path (e.g., "/activitypub/inbox")
+          headers: Dict of request headers
+          body: Request body as bytes
+
+      Returns:
+          bool: True if all checks pass, False otherwise
+      """
+      # Step 1: Verify digest
+      digest_header = headers.get('digest') or headers.get('Digest')
+      if digest_header:
+          if not verify_digest(digest_header, body):
+              print("✗ Digest verification failed")
+              return False
+      else:
+          print("Warning: No Digest header present")
+
+      # Step 2: Verify date
+      date_header = headers.get('date') or headers.get('Date')
+      if date_header:
+          if not verify_date(date_header):
+              print("✗ Date verification failed")
+              return False
+      else:
+          print("Warning: No Date header present")
+
+      # Step 3: Verify signature
+      if not verify_signature(signature_header, method, path, headers, body):
+          print("✗ Signature verification failed")
+          return False
+
+      print("✓ Request verification passed")
+      return True
+
+  Now let me add all these functions to the file!
+
+> do it! 
+
+● Update(http_signatures.py)
+  ⎿  Updated http_signatures.py with 275 additions                                                                                       
+       118        except Exception as e:
+       119            print(f"Error fetching public key for {key_id}: {e}")
+       120            return None
+       121 +  
+       122 +  
+       123 +  def build_signing_string(headers_to_sign: str, method: str, path: str, headers: Dict[str, str]) -> str:
+       124 +      """
+       125 +      Build the signing string from request components
+       126 +  
+       127 +      Per spec: https://swicg.github.io/activitypub-http-signature/#signing-string
+       128 +      Format: "header-name: header-value\nheader-name: header-value\n..."
+       129 +  
+       130 +      Args:
+       131 +          headers_to_sign: Space-separated list of headers (e.g., "(request-target) host date digest")
+       132 +          method: HTTP method (e.g., "POST")
+       133 +          path: Request path (e.g., "/activitypub/inbox")
+       134 +          headers: Dict of HTTP headers from the request
+       135 +  
+       136 +      Returns:
+       137 +          str: Signing string ready for signature verification
+       138 +      """
+       139 +      header_list = headers_to_sign.split()
+       140 +      signing_parts = []
+       141 +  
+       142 +      for header_name in header_list:
+       143 +          if header_name == '(request-target)':
+       144 +              # Special pseudo-header: "post /activitypub/inbox"
+       145 +              target = f"{method.lower()} {path}"
+       146 +              signing_parts.append(f"(request-target): {target}")
+       147 +          else:
+       148 +              # Regular header - use lowercase name
+       149 +              header_value = headers.get(header_name) or headers.get(header_name.lower()) or headers.get(header_name.title())
+       150 +              if header_value:
+       151 +                  signing_parts.append(f"{header_name.lower()}: {header_value}")
+       152 +              else:
+       153 +                  # Header not found - signature will fail
+       154 +                  print(f"Warning: Header '{header_name}' not found in request")
+       155 +                  signing_parts.append(f"{header_name.lower()}: ")
+       156 +  
+       157 +      return '\n'.join(signing_parts)
+       158 +  
+       159 +  
+       160 +  def compute_digest(body: bytes) -> str:
+       161 +      """
+       162 +      Compute SHA-256 digest of request body
+       163 +  
+       164 +      Per spec: Digest header format is "SHA-256=base64(sha256(body))"
+       165 +  
+       166 +      Args:
+       167 +          body: Request body as bytes
+       168 +  
+       169 +      Returns:
+       170 +          str: Digest header value (e.g., "SHA-256=abc123...")
+       171 +      """
+       172 +      hash_obj = hashlib.sha256(body)
+       173 +      digest_b64 = base64.b64encode(hash_obj.digest()).decode('utf-8')
+       174 +      return f"SHA-256={digest_b64}"
+       175 +  
+       176 +  
+       177 +  def verify_signature(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+       178 +      """
+       179 +      Verify HTTP signature on incoming request
+       180 +  
+       181 +      Args:
+       182 +          signature_header: Value of the Signature header
+       183 +          method: HTTP method (e.g., "POST")
+       184 +          path: Request path (e.g., "/activitypub/inbox")
+       185 +          headers: Dict of request headers
+       186 +          body: Request body as bytes
+       187 +  
+       188 +      Returns:
+       189 +          bool: True if signature is valid, False otherwise
+       190 +      """
+       191 +      try:
+       192 +          # Parse signature header
+       193 +          sig_components = parse_signature_header(signature_header)
+       194 +  
+       195 +          key_id = sig_components.get('keyId')
+       196 +          signature_b64 = sig_components.get('signature')
+       197 +          headers_to_sign = sig_components.get('headers', '(request-target) host date')
+       198 +  
+       199 +          if not key_id or not signature_b64:
+       200 +              print("Error: Missing keyId or signature in Signature header")
+       201 +              return False
+       202 +  
+       203 +          # Fetch the public key
+       204 +          public_key_pem = fetch_actor_public_key(key_id)
+       205 +          if not public_key_pem:
+       206 +              print(f"Error: Could not fetch public key for {key_id}")
+       207 +              return False
+       208 +  
+       209 +          # Build signing string
+       210 +          signing_string = build_signing_string(headers_to_sign, method, path, headers)
+       211 +  
+       212 +          # Decode signature
+       213 +          signature_bytes = base64.b64decode(signature_b64)
+       214 +  
+       215 +          # Load public key
+       216 +          public_key = serialization.load_pem_public_key(
+       217 +              public_key_pem.encode('utf-8'),
+       218 +              backend=default_backend()
+       219 +          )
+       220 +  
+       221 +          # Verify signature using RSA-SHA256
+       222 +          public_key.verify(
+       223 +              signature_bytes,
+       224 +              signing_string.encode('utf-8'),
+       225 +              padding.PKCS1v15(),
+       226 +              hashes.SHA256()
+       227 +          )
+       228 +  
+       229 +          # If we get here, signature is valid
+       230 +          print(f"✓ Signature verified for {key_id}")
+       231 +          return True
+       232 +  
+       233 +      except Exception as e:
+       234 +          print(f"Signature verification failed: {e}")
+       235 +          return False
+       236 +  
+       237 +  
+       238 +  def sign_request(method: str, path: str, headers: Dict[str, str], body: bytes, private_key_pem: str, key_id: str) -> str:
+       239 +      """
+       240 +      Generate HTTP signature for outgoing request
+       241 +  
+       242 +      Args:
+       243 +          method: HTTP method (e.g., "POST")
+       244 +          path: Request path (e.g., "/inbox")
+       245 +          headers: Dict of headers to include in request
+       246 +          body: Request body as bytes
+       247 +          private_key_pem: Your private key (PEM format)
+       248 +          key_id: Your public key ID URL (e.g., "https://yourdomain.com/activitypub/actor#main-key")
+       249 +  
+       250 +      Returns:
+       251 +          str: Signature header value to add to request
+       252 +      """
+       253 +      try:
+       254 +          # Compute digest of body
+       255 +          digest = compute_digest(body)
+       256 +          headers['digest'] = digest
+       257 +  
+       258 +          # Headers to sign (per ActivityPub spec)
+       259 +          headers_to_sign = '(request-target) host date digest content-type'
+       260 +  
+       261 +          # Build signing string
+       262 +          signing_string = build_signing_string(headers_to_sign, method, path, headers)
+       263 +  
+       264 +          # Load private key
+       265 +          private_key = serialization.load_pem_private_key(
+       266 +              private_key_pem.encode('utf-8'),
+       267 +              password=None,
+       268 +              backend=default_backend()
+       269 +          )
+       270 +  
+       271 +          # Sign the string using RSA-SHA256
+       272 +          signature_bytes = private_key.sign(
+       273 +              signing_string.encode('utf-8'),
+       274 +              padding.PKCS1v15(),
+       275 +              hashes.SHA256()
+       276 +          )
+       277 +  
+       278 +          # Encode signature as base64
+       279 +          signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
+       280 +  
+       281 +          # Build Signature header
+       282 +          signature_header = f'keyId="{key_id}",algorithm="hs2019",headers="{headers_to_sign}",signature="{signature_b64}"'
+       283 +  
+       284 +          return signature_header
+       285 +  
+       286 +      except Exception as e:
+       287 +          print(f"Error signing request: {e}")
+       288 +          raise
+       289 +  
+       290 +  
+       291 +  def verify_digest(digest_header: str, body: bytes) -> bool:
+       292 +      """
+       293 +      Verify that Digest header matches the request body
+       294 +  
+       295 +      Args:
+       296 +          digest_header: Value of Digest header (e.g., "SHA-256=abc123...")
+       297 +          body: Request body as bytes
+       298 +  
+       299 +      Returns:
+       300 +          bool: True if digest matches, False otherwise
+       301 +      """
+       302 +      try:
+       303 +          # Compute expected digest
+       304 +          expected_digest = compute_digest(body)
+       305 +  
+       306 +          # Compare (case-sensitive)
+       307 +          if digest_header == expected_digest:
+       308 +              return True
+       309 +          else:
+       310 +              print(f"Digest mismatch: expected {expected_digest}, got {digest_header}")
+       311 +              return False
+       312 +  
+       313 +      except Exception as e:
+       314 +          print(f"Error verifying digest: {e}")
+       315 +          return False
+       316 +  
+       317 +  
+       318 +  def verify_date(date_header: str, max_age_seconds: int = 300) -> bool:
+       319 +      """
+       320 +      Verify that Date header is within acceptable time window
+       321 +  
+       322 +      Prevents replay attacks by rejecting old requests
+       323 +  
+       324 +      Args:
+       325 +          date_header: Value of Date header (RFC 2616 format)
+       326 +          max_age_seconds: Maximum age in seconds (default 5 minutes)
+       327 +  
+       328 +      Returns:
+       329 +          bool: True if date is valid, False otherwise
+       330 +      """
+       331 +      try:
+       332 +          from email.utils import parsedate_to_datetime
+       333 +  
+       334 +          request_time = parsedate_to_datetime(date_header)
+       335 +          current_time = datetime.now(timezone.utc)
+       336 +  
+       337 +          # Calculate age
+       338 +          age = (current_time - request_time).total_seconds()
+       339 +  
+       340 +          # Check if within acceptable range (allow some clock skew in both directions)
+       341 +          if abs(age) <= max_age_seconds:
+       342 +              return True
+       343 +          else:
+       344 +              print(f"Date too old/new: {age} seconds (max {max_age_seconds})")
+       345 +              return False
+       346 +  
+       347 +      except Exception as e:
+       348 +          print(f"Error parsing date header: {e}")
+       349 +          return False
+       350 +  
+       351 +  
+       352 +  def verify_request(signature_header: str, method: str, path: str, headers: Dict[str, str], body: bytes) -> bool:
+       353 +      """
+       354 +      Complete verification of incoming ActivityPub request
+       355 +  
+       356 +      Performs:
+       357 +      1. Digest verification (body matches Digest header)
+       358 +      2. Date verification (request is recent)
+       359 +      3. Signature verification (cryptographic validation)
+       360 +  
+       361 +      Args:
+       362 +          signature_header: Value of the Signature header
+       363 +          method: HTTP method (e.g., "POST")
+       364 +          path: Request path (e.g., "/activitypub/inbox")
+       365 +          headers: Dict of request headers
+       366 +          body: Request body as bytes
+       367 +  
+       368 +      Returns:
+       369 +          bool: True if all checks pass, False otherwise
+       370 +      """
+       371 +      # Step 1: Verify digest
+       372 +      digest_header = headers.get('digest') or headers.get('Digest')
+       373 +      if digest_header:
+       374 +          if not verify_digest(digest_header, body):
+       375 +              print("✗ Digest verification failed")
+       376 +              return False
+       377 +      else:
+       378 +          print("Warning: No Digest header present")
+       379 +  
+       380 +      # Step 2: Verify date
+       381 +      date_header = headers.get('date') or headers.get('Date')
+       382 +      if date_header:
+       383 +          if not verify_date(date_header):
+       384 +              print("✗ Date verification failed")
+       385 +              return False
+       386 +      else:
+       387 +          print("Warning: No Date header present")
+       388 +  
+       389 +      # Step 3: Verify signature
+       390 +      if not verify_signature(signature_header, method, path, headers, body):
+       391 +          print("✗ Signature verification failed")
+       392 +          return False
+       393 +  
+       394 +      print("✓ Request verification passed")
+       395 +      return True
+
+● Perfect! The signature module is complete! 🎉
+
+● Now let's integrate signature verification into the inbox endpoint. Here's the updated inbox function:
+
+  @app.route(f'/{NAMESPACE}/inbox', methods=['POST'])
+  def inbox():
+      """Inbox endpoint - receive activities from other servers"""
+      from http_signatures import verify_request
+
+      content_type = request.headers.get('Content-Type', '')
+
+      # Basic content type validation
+      if CONTENT_TYPE_AP not in content_type and CONTENT_TYPE_LD not in content_type:
+          return jsonify({'error': 'Invalid content type'}), 400
+
+      # Get signature header
+      signature_header = request.headers.get('Signature')
+      if not signature_header:
+          print("⚠️  No signature header - rejecting request")
+          return jsonify({'error': 'Missing signature'}), 401
+
+      try:
+          # Get raw request body
+          body = request.get_data()
+
+          # Verify HTTP signature
+          headers_dict = dict(request.headers)
+          if not verify_request(signature_header, request.method, request.path, headers_dict, body):
+              print("✗ Signature verification failed - rejecting request")
+              return jsonify({'error': 'Invalid signature'}), 401
+
+          # Parse activity (we already verified the body)
+          activity = request.get_json()
+          if not activity or 'type' not in activity:
+              return jsonify({'error': 'Invalid activity'}), 400
+
+          # Save incoming activity to inbox folder
+          filename = save_inbox_activity(activity)
+
+          # Queue activity for processing by creating symlink
+          queue_activity_for_processing(filename)
+
+          print(f"✓ Received and verified {activity['type']} activity from {activity.get('actor', 'unknown')}")
+          return '', 202  # Accepted
+
+      except Exception as e:
+          print(f"Inbox error: {e}")
+          return jsonify({'error': 'Internal server error'}), 500
+
+  Should I add this to app.py?
+
+> before we move on, please help me understand the signature stuff! 1. If this is standard procedures, should we be using a library? 2. Could you generate a flow char (using mermaid or 
+some other programatic language that I can visualize) with a step-by-step summary? 
+
+● Excellent questions! Let me address both:
+
+  1. Why not use a library?
+
+  TL;DR: Most libraries are outdated or don't match ActivityPub's specific needs.
+
+  The problem:
+  - httpsig library - Last updated 2018, doesn't support hs2019 algorithm
+  - http-message-signatures - Implements RFC 9421 (newer spec), not draft-cavage-12 (what ActivityPub uses)
+  - ActivityPub is stuck on an old draft spec because changing would break federation
+
+  What real servers do:
+  - Mastodon: https://github.com/mastodon/mastodon/blob/main/app/lib/request.rb
+  - Pleroma: https://git.pleroma.social/pleroma/pleroma/-/blob/develop/lib/pleroma/signature.ex
+  - Most roll their own because the spec is simple enough
+
+  Our approach: ~250 lines of clear, spec-compliant code that you control and understand.
+
+  2. Flow Chart - HTTP Signature Process
+
+  sequenceDiagram
+      participant M as Mastodon Server
+      participant Y as Your Server
+      participant MA as Mastodon Actor Endpoint
+
+      Note over M,Y: INCOMING REQUEST (Verification)
+
+      M->>M: 1. Create Follow activity
+      M->>M: 2. Compute SHA-256 digest of body
+      M->>M: 3. Build signing string:<br/>"(request-target): post /inbox<br/>host: yourserver.com<br/>date: Mon, 01 Jan 2025...<br/>digest: SHA-256=abc123...<br/>content-type:
+  application/activity+json"
+      M->>M: 4. Sign with private key
+      M->>M: 5. Add Signature header
+      M->>Y: POST /inbox with Signature header
+
+      Y->>Y: 6. Parse Signature header<br/>(extract keyId, signature, headers)
+      Y->>MA: 7. Fetch public key from keyId URL
+      MA->>Y: 8. Return actor document with publicKeyPem
+      Y->>Y: 9. Rebuild same signing string from request
+      Y->>Y: 10. Verify signature using public key
+
+      alt Signature Valid
+          Y->>Y: 11. Process activity
+          Y->>M: 202 Accepted
+      else Signature Invalid
+          Y->>M: 401 Unauthorized
+      end
+
+      Note over M,Y: OUTGOING REQUEST (Signing)
+
+      Y->>Y: 1. Generate Accept activity
+      Y->>Y: 2. Compute SHA-256 digest of body
+      Y->>Y: 3. Build signing string
+      Y->>Y: 4. Sign with YOUR private key
+      Y->>Y: 5. Add Signature header
+      Y->>M: POST to follower's inbox with Signature
+
+      M->>Y: 6. Fetch YOUR public key
+      Y->>M: 7. Return your actor with publicKeyPem
+      M->>M: 8. Verify signature
+      M->>Y: 202 Accepted
+
+  Step-by-Step Breakdown
+
+  Incoming: Someone sends YOU an activity
+
+  flowchart TD
+      A[Receive POST to /inbox] --> B{Has Signature header?}
+      B -->|No| Z1[Reject: 401]
+      B -->|Yes| C[Parse Signature header]
+
+      C --> D[Extract keyId from Signature]
+      D --> E[Fetch actor document from keyId URL]
+      E --> F[Extract publicKeyPem from actor]
+
+      F --> G[Get request components:<br/>- Method: POST<br/>- Path: /inbox<br/>- Headers: host, date, digest<br/>- Body: raw bytes]
+
+      G --> H[Build signing string:<br/>Join headers in specific order]
+
+      H --> I[Decode signature from base64]
+
+      I --> J[Verify signature:<br/>public_key.verify signature, signing_string]
+
+      J -->|Valid| K{Digest matches body?}
+      J -->|Invalid| Z2[Reject: 401]
+
+      K -->|Yes| L{Date is recent?}
+      K -->|No| Z3[Reject: 401]
+
+      L -->|Yes| M[✓ Accept and process activity]
+      L -->|No| Z4[Reject: 401 replay attack]
+
+  Outgoing: YOU send an activity to someone
+
+  flowchart TD
+      A[Generate Accept activity] --> B[Convert to JSON bytes]
+      B --> C[Compute SHA-256 digest of body]
+      C --> D[Build headers:<br/>- host: mastodon.social<br/>- date: current time<br/>- digest: SHA-256=...<br/>- content-type: application/json]
+
+      D --> E[Build signing string from headers]
+      E --> F[Sign with YOUR private key]
+      F --> G[Encode signature as base64]
+      G --> H[Create Signature header:<br/>keyId, algorithm, headers, signature]
+
+      H --> I[POST to follower's inbox]
+      I --> J[They verify using YOUR public key]
+      J --> K[✓ Activity delivered]
+
+  The "Why" - Security Benefits
+
+  1. Authentication: Proves the request came from the claimed actor
+  2. Integrity: Body can't be modified in transit (digest check)
+  3. Anti-replay: Old requests can't be reused (date check)
+  4. Non-repudiation: Can't deny sending it (cryptographic proof)
+
+  The Magic Ingredient: Asymmetric Cryptography
+
+  Private Key (secret)  →  Signs messages
+  Public Key (published) →  Verifies signatures
+
+  - Only YOU can create signatures with your private key
+  - ANYONE can verify with your public key
+  - Can't derive private key from public key (RSA math magic)
+
+  Does this clarify the process?
+
+> This is excelent!!! I didn't know you are so good at diagraming! ;) I have another question: What activities MUST be signed in the AP protocol? When I was testing our software, I sent 
+a follow request from a legit client using my personal Fediverse account and it didn't have a signature. 
+
+● Excellent observation! You've stumbled onto an important nuance! 🎯
+
+  The Answer: It depends on Client-to-Server vs Server-to-Server
+
+  What you experienced:
+
+  flowchart LR
+      A[Your Mastodon Client] -->|OAuth/Session Auth<br/>NO SIGNATURE| B[Your Mastodon Server]
+      B -->|HTTP Signature<br/>SIGNED| C[Remote Server Inbox]
+
+  Client → Server: OAuth/bearer token (no HTTP signature)Server → Server: HTTP signature (signed)
+
+  The ActivityPub Spec Reality:
+
+  The W3C ActivityPub spec says signatures are RECOMMENDED not REQUIRED:
+  - C2S (Client-to-Server): Usually OAuth, not HTTP signatures
+  - S2S (Server-to-Server): HTTP signatures are the de facto standard
+
+  Real-world server behavior:
+
+  | Server   | Default Mode                    | Strict Mode                               |
+  |----------|---------------------------------|-------------------------------------------|
+  | Mastodon | Accepts unsigned                | AUTHORIZED_FETCH=true requires signatures |
+  | Pleroma  | Accepts unsigned                | Config option to require                  |
+  | Pixelfed | Accepts unsigned                | Config option                             |
+  | tinyFedi | We should make it configurable! |                                           |
+
+  What we should do:
+
+  Add a config option for signature enforcement:
+
+  {
+    "security": {
+      "require_http_signatures": false,  // ← Add this
+      "public_key_file": "keys/public_key.pem",
+      "private_key_file": "keys/private_key.pem"
+    }
+  }
+
+  Development mode: false (accept unsigned for testing)Production mode: true (reject unsigned S2S traffic)
+
+  Updated inbox logic:
+
+  @app.route(f'/{NAMESPACE}/inbox', methods=['POST'])
+  def inbox():
+      """Inbox endpoint - receive activities from other servers"""
+      # ...
+
+      signature_header = request.headers.get('Signature')
+      require_signatures = config['security'].get('require_http_signatures', False)
+
+      if signature_header:
+          # Signature present - verify it
+          if not verify_request(signature_header, request.method, request.path, headers_dict, body):
+              print("✗ Invalid signature - rejecting")
+              return jsonify({'error': 'Invalid signature'}), 401
+          print("✓ Signature verified")
+      elif require_signatures:
+          # No signature but required - reject
+          print("⚠️  No signature and signatures required - rejecting")
+          return jsonify({'error': 'Signature required'}), 401
+      else:
+          # No signature but not required - accept with warning
+          print("⚠️  Accepting unsigned request (signature verification disabled)")
+
+      # Process activity...
+
+  Should I implement this config-based approach instead?
+
+> Yes, you nailed it! 
+
+● Awesome! Let's implement it!
+
+  Step 1: Update config.json.example
+
+● Read(config.json.example)
+  ⎿  Read 28 lines (ctrl+o to expand)
+
+● Update(config.json.example)
+  ⎿  Updated config.json.example with 2 additions and 1 removal
+       15      },
+       16      "security": {
+       17        "public_key_file": "keys/public_key.pem",
+       18 -      "private_key_file": "keys/private_key.pem"
+       18 +      "private_key_file": "keys/private_key.pem",
+       19 +      "require_http_signatures": false
+       20      },
+       21      "directories": {
+       22        "inbox": "static/inbox",
+
+● Step 2: Update inbox endpoint with configurable verification
+
+  Here's the updated inbox function:
+
+  @app.route(f'/{NAMESPACE}/inbox', methods=['POST'])
+  def inbox():
+      """Inbox endpoint - receive activities from other servers"""
+      from http_signatures import verify_request
+
+      content_type = request.headers.get('Content-Type', '')
+
+      # Basic content type validation
+      if CONTENT_TYPE_AP not in content_type and CONTENT_TYPE_LD not in content_type:
+          return jsonify({'error': 'Invalid content type'}), 400
+
+      try:
+          # Get raw request body and headers
+          body = request.get_data()
+          headers_dict = dict(request.headers)
+
+          # Check for signature header
+          signature_header = headers_dict.get('Signature')
+          require_signatures = config['security'].get('require_http_signatures', False)
+
+          if signature_header:
+              # Signature present - verify it
+              if not verify_request(signature_header, request.method, request.path, headers_dict, body):
+                  print("✗ Invalid signature - rejecting request")
+                  return jsonify({'error': 'Invalid signature'}), 401
+              print("✓ Signature verified")
+          elif require_signatures:
+              # No signature but required - reject
+              print("⚠️  No signature and signatures required - rejecting request")
+              return jsonify({'error': 'Signature required'}), 401
+          else:
+              # No signature but not required - accept with warning
+              print("⚠️  Accepting unsigned request (signature verification disabled)")
+
+          # Parse activity (we already have the body)
+          activity = request.get_json()
+          if not activity or 'type' not in activity:
+              return jsonify({'error': 'Invalid activity'}), 400
+
+          # Save incoming activity to inbox folder
+          filename = save_inbox_activity(activity)
+
+          # Queue activity for processing by creating symlink
+          queue_activity_for_processing(filename)
+
+          actor = activity.get('actor', 'unknown')
+          verified_status = "✓ verified" if signature_header else "⚠️  unverified"
+          print(f"Received {verified_status} {activity['type']} activity from {actor}")
+          return '', 202  # Accepted
+
+      except Exception as e:
+          print(f"Inbox error: {e}")
+          return jsonify({'error': 'Internal server error'}), 500
+
+  Should I add this to app.py?
+
+> yep! but I also just realized something: is the signature present on the body of the activity or only on the HTTP header? 
+
+● Excellent question! This is actually a common point of confusion!
+
+  Two Different Signature Types:
+
+  1. HTTP Signatures (what we implemented)
+
+  - Location: HTTP Signature header ONLY
+  - Signs: The HTTP request itself
+  - Body: Activity JSON has NO signature field
+
+  POST /inbox HTTP/1.1
+  Host: yourserver.com
+  Signature: keyId="...",headers="...",signature="..."
+  Content-Type: application/activity+json
+
+  {
+    "type": "Follow",
+    "actor": "https://mastodon.social/users/alice",
+    "object": "https://yourserver.com/actor"
+  }
+
+  2. Linked Data Signatures (older, mostly deprecated)
+
+  - Location: Inside the JSON body
+  - Signs: The JSON document itself
+  - Header: No signature in HTTP headers
+
+  {
+    "type": "Follow",
+    "actor": "https://mastodon.social/users/alice",
+    "object": "https://yourserver.com/actor",
+    "signature": {
+      "type": "RsaSignature2017",
+      "creator": "https://mastodon.social/users/alice#main-key",
+      "created": "2025-01-05T12:00:00Z",
+      "signatureValue": "base64encodedstuff=="
+    }
+  }
+
+  What Modern Fediverse Uses:
+
+  HTTP Signatures (header-based) are the standard now because:
+  - Works at transport layer (HTTP)
+  - Simpler to implement
+  - Protects entire request, not just body
+  - Mastodon, Pleroma, Pixelfed all use this
+
+  Linked Data Signatures are rare now:
+  - More complex (JSON-LD canonicalization)
+  - Some old implementations might still send them
+  - Mostly historical
+
+  Our Implementation:
+
+  We're doing HTTP Signatures only - the correct modern approach! The activity body stays clean with no signature fields.
+
+  Does that clarify it?
+
+> that is clear! I have, though, recently saw some discussions about this "linked data signature" and that it may have a come back (for example, imagine in a migration context where you 
+would like to check if a stored activity is "valid"... being able to verify integrity and authorship of the acitivity is a cool property of having that on the activity!). For now, let's 
+just keep this as an entry in the @README.md file (new subsession of "To Consider"). As you go through the README file, please update it with our current accomplishment. 
+  ⎿  Read README.md (224 lines)
+
+● Perfect idea! Let me read the README and update it:
+
+● Read(README.md)
+  ⎿  Read 224 lines (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Updated README.md with 2 additions and 1 removal       
+       52      },
+       53      "security": {
+       54        "public_key_file": "keys/public_key.pem",
+       55 -      "private_key_file": "keys/private_key.pem"
+       55 +      "private_key_file": "keys/private_key.pem",
+       56 +      "require_http_signatures": false
+       57      }
+       58    }
+       59    ```
+
+● Update(README.md)
+  ⎿  Updated README.md with 3 additions and 1 removal                                                                 
+       146    - **Actor Profile** - Dynamic actor generation from config
+       147    - **Outbox Collection** - Serves all published activities
+       148    - **Individual Endpoints** - Posts and activities accessible via direct URLs
+       149 -  - **Inbox Endpoint** - Receives activities from other federated servers
+       149 +  - **Inbox Endpoint** - Receives activities from other federated servers with HTTP signature verification
+       150    - **Followers Collection** - Manages and serves follower list
+       151    - **Content Negotiation** - Proper ActivityPub headers and validation
+       152 +  - **HTTP Signature Verification** - Cryptographic validation of incoming activities (configurable)
+       153 +  - **HTTP Signature Signing** - Sign outgoing activities for secure delivery
+       154    
+       155    **File Structure:**
+       156    ```
+
+● Update(README.md)
+  ⎿  Updated README.md with 2 additions and 2 removals                                                                                                                            
+       175    - Automatic follower management (configurable)
+       176    
+       177    **Configuration Options:**
+       178 -  - `auto_accept_follow_requests` - Automatically accept follow requests (default: true)
+       179 -  - Set to `false` for manual approval of followers
+       178 +  - `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
+       179 +  - `require_http_signatures` - Require HTTP signatures on all incoming activities (default: false). Set to `true` for production to reject unsigned server-to-server 
+           + traffic
+       180    
+       181    ## What's Next
+       182    
+
+● Update(README.md)
+  ⎿  Updated README.md with 4 additions and 3 removals                                                                                                                             
+       180    
+       181    ## What's Next
+       182    
+       183 -  **Completed (2025-09-27):**
+       183 +  **Completed (2025-10-05):**
+       184    - ✅ Follow request processing (add to followers, generate Accept activities)
+       185    - ✅ Undo Follow processing (remove followers)
+       186    - ✅ Extensible activity processor architecture with composite keys
+       187 +  - ✅ HTTP signature verification for incoming activities (draft-cavage-http-signatures-12)
+       188 +  - ✅ HTTP signature signing for outgoing activities
+       189    
+       190    **High Priority TODO:**
+       191 +  - **Activity delivery system** - Send signed activities to follower inboxes (in progress)
+       192    - **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
+       193    - **Outbox folder organization** - Create dedicated outbox directory structure mirroring inbox organization for better file management
+       194 -  - **HTTP signature verification** - Implement cryptographic signature validation for all incoming activities (critical for security)
+       195 -  - **Activity delivery system** - Send activities to follower inboxes (depends on signature implementation for outgoing activity signing)
+       194    
+       195    **Future Enhancements:**
+       196    - Manual follow approval workflow
+
+● Update(README.md)
+  ⎿  Updated README.md with 38 additions and 1 removal                                                                                                                                 
+       225    - Auto-accept mode: immediately add to followers and generate Accept activity
+       226    - Manual approval mode: requires processing pending requests
+       227    
+       228 -  **Note:** While ActivityPub spec defines standard collections (`/followers`, `/following`), many servers implement custom APIs for follow request management (e.g., 
+           - Mastodon's `/api/v1/follow_requests`, Pleroma's similar endpoints). Future enhancements could add a `/pending-followers` endpoint for manual approval workflows.
+       228   \ No newline at end of file
+       229 +  **Note:** While ActivityPub spec defines standard collections (`/followers`, `/following`), many servers implement custom APIs for follow request management (e.g., 
+           + Mastodon's `/api/v1/follow_requests`, Pleroma's similar endpoints). Future enhancements could add a `/pending-followers` endpoint for manual approval workflows.
+       230 +  
+       231 +  ### Linked Data Signatures vs HTTP Signatures
+       232 +  
+       233 +  **Current Implementation:** HTTP Signatures (transport-layer, header-based)
+       234 +  
+       235 +  The fediverse currently uses **HTTP Signatures** (draft-cavage-http-signatures-12) which sign the HTTP request itself. The signature lives in the `Signature` header, and
+           +  the activity JSON body remains clean without embedded signatures.
+       236 +  
+       237 +  **Alternative Approach:** Linked Data Signatures (object-layer, embedded)
+       238 +  
+       239 +  **Linked Data Signatures** embed cryptographic signatures directly in the ActivityPub JSON document:
+       240 +  
+       241 +  ```json
+       242 +  {
+       243 +    "type": "Follow",
+       244 +    "actor": "https://example.com/users/alice",
+       245 +    "object": "https://yourserver.com/actor",
+       246 +    "signature": {
+       247 +      "type": "RsaSignature2017",
+       248 +      "creator": "https://example.com/users/alice#main-key",
+       249 +      "created": "2025-01-05T12:00:00Z",
+       250 +      "signatureValue": "base64encodedstuff=="
+       251 +    }
+       252 +  }
+       253 +  ```
+       254 +  
+       255 +  **Potential Advantages:**
+       256 +  - **Persistence:** Signature travels with the activity when stored/forwarded
+       257 +  - **Verification without transport:** Can verify authenticity of stored activities later
+       258 +  - **Migration scenarios:** Verify integrity and authorship of archived activities
+       259 +  - **Multi-hop federation:** Original signature preserved through forwarding
+       260 +  
+       261 +  **Why Not Implemented:**
+       262 +  - More complex (requires JSON-LD canonicalization)
+       263 +  - Mostly deprecated in modern fediverse (Mastodon, Pleroma use HTTP signatures)
+       264 +  - HTTP signatures are simpler and cover the same security requirements for real-time federation
+       265 +  
+       266 +  **Future Consideration:** If activity archival, migration, or multi-hop forwarding become important use cases, adding support for embedded Linked Data Signatures 
+           + alongside HTTP signatures could provide additional verification guarantees for stored content.
+       267   \ No newline at end of file
+
+● Perfect! README is updated. Now let me apply the inbox changes to app.py:
+
+● Update(app.py)
+  ⎿  Updated app.py with 28 additions and 1 removal                                                                 
+       137    @app.route(f'/{NAMESPACE}/inbox', methods=['POST'])
+       138    def inbox():
+       139        """Inbox endpoint - receive activities from other servers"""
+       140 +      from http_signatures import verify_request
+       141 +  
+       142        content_type = request.headers.get('Content-Type', '')
+       143    
+       144        # Basic content type validation
+     ...
+       144            return jsonify({'error': 'Invalid content type'}), 400
+       145    
+       146        try:
+       147 +          # Get raw request body and headers
+       148 +          body = request.get_data()
+       149 +          headers_dict = dict(request.headers)
+       150 +  
+       151 +          # Check for signature header
+       152 +          signature_header = headers_dict.get('Signature')
+       153 +          require_signatures = config['security'].get('require_http_signatures', False)
+       154 +  
+       155 +          if signature_header:
+       156 +              # Signature present - verify it
+       157 +              if not verify_request(signature_header, request.method, request.path, headers_dict, body):
+       158 +                  print("✗ Invalid signature - rejecting request")
+       159 +                  return jsonify({'error': 'Invalid signature'}), 401
+       160 +              print("✓ Signature verified")
+       161 +          elif require_signatures:
+       162 +              # No signature but required - reject
+       163 +              print("⚠️  No signature and signatures required - rejecting request")
+       164 +              return jsonify({'error': 'Signature required'}), 401
+       165 +          else:
+       166 +              # No signature but not required - accept with warning
+       167 +              print("⚠️  Accepting unsigned request (signature verification disabled)")
+       168 +  
+       169 +          # Parse activity (we already have the body)
+       170            activity = request.get_json()
+       171            if not activity or 'type' not in activity:
+       172                return jsonify({'error': 'Invalid activity'}), 400
+     ...
+       154            # Queue activity for processing by creating symlink
+       155            queue_activity_for_processing(filename)
+       156    
+       157 -          print(f"Received {activity['type']} activity from {activity.get('actor', 'unknown')}")
+       157 +          actor = activity.get('actor', 'unknown')
+       158 +          verified_status = "✓ verified" if signature_header else "⚠️  unverified"
+       159 +          print(f"Received {verified_status} {activity['type']} activity from {actor}")
+       160            return '', 202  # Accepted
+       161    
+       162        except Exception as e:
+
+● Perfect! Inbox is now protected with HTTP signature verification. Let me update the todo list:
+
+● Excellent progress! Now let's implement the activity delivery system. This is where we'll actually SEND activities to other servers.
+
+  Activity Delivery Module Design
+
+  Here's what we need:
+
+  def deliver_activity_to_inbox(activity, inbox_url, config, private_key_pem):
+      """
+      Deliver a single activity to a remote inbox
+      
+      Steps:
+      1. Fetch recipient actor to get inbox URL
+      2. Sign the activity with our private key
+      3. POST to their inbox
+      4. Handle response/errors
+      """
+
+  Let me create the module:
+
+● Write(activity_delivery.py)
+  ⎿  User rejected write to activity_delivery.py
+        1 +  #!/usr/bin/env python3
+        2 +  """
+        3 +  Activity Delivery Module for TinyFedi ActivityPub Server
+        4 +  
+        5 +  Handles delivery of activities to remote ActivityPub inboxes with HTTP signature signing.
+        6 +  """
+        7 +  
+        8 +  import json
+        9 +  import requests
+       10 +  from datetime import datetime, timezone
+       11 +  from email.utils import formatdate
+       12 +  from urllib.parse import urlparse
+       13 +  from http_signatures import sign_request
+       14 +  
+       15 +  
+       16 +  def fetch_actor_inbox(actor_url: str) -> str:
+       17 +      """
+       18 +      Fetch actor document and extract inbox URL
+       19 +  
+       20 +      Args:
+       21 +          actor_url: URL of the actor (e.g., 'https://mastodon.social/users/alice')
+       22 +  
+       23 +      Returns:
+       24 +          str: Inbox URL, or None if fetch fails
+       25 +      """
+       26 +      try:
+       27 +          headers = {
+       28 +              'Accept': 'application/activity+json, application/ld+json',
+       29 +              'User-Agent': 'TinyFedi/1.0'
+       30 +          }
+       31 +  
+       32 +          response = requests.get(actor_url, headers=headers, timeout=10)
+       33 +          response.raise_for_status()
+       34 +          actor_data = response.json()
+       35 +  
+       36 +          inbox_url = actor_data.get('inbox')
+       37 +          if not inbox_url:
+       38 +              print(f"Warning: No inbox found in actor document for {actor_url}")
+       39 +              return None
+       40 +  
+       41 +          return inbox_url
+       42 +  
+       43 +      except Exception as e:
+       44 +          print(f"Error fetching inbox for {actor_url}: {e}")
+       45 +          return None
+
+> let's take a break! Commit this todo list to @docs/CLAUDE/CLAUDE.md but please make sure to add a create automated tests for the signature system before anything else. 
+  ⎿  Read docs/CLAUDE/CLAUDE.md (228 lines)
+
+● Perfect! Let me update the CLAUDE.md file with our progress and the updated todo list:
+
+● Update(docs/CLAUDE.md)
+  ⎿  Error editing file
+
+● Search(pattern: "docs/**/*.md")
+  ⎿  Found 2 files (ctrl+o to expand)
+
+● Update(docs/CLAUDE/CLAUDE.md)
+  ⎿  Updated docs/CLAUDE/CLAUDE.md with 26 additions and 1 removal                                                                                                                 
+       225    ls static/activities/accept-*
+       226    ```
+       227    
+       228 -  **Current Status**: The server now has **complete follow/unfollow processing** with proper delegation architecture. Next phase focuses on **security hardening** and 
+           - **production deployment readiness**.
+       228   \ No newline at end of file
+       229 +  **Current Status**: The server now has **complete follow/unfollow processing** with proper delegation architecture. Next phase focuses on **security hardening** and 
+           + **production deployment readiness**.
+       230 +  
+       231 +  ## Recent Progress (2025-10-05)
+       232 +  
+       233 +  **HTTP Signatures Implementation (Completed):**
+       234 +  - ✅ **Implemented `http_signatures.py`** - Complete HTTP signature module following draft-cavage-http-signatures-12 spec
+       235 +  - ✅ **Signature Verification** - Verifies incoming ActivityPub requests (digest, date, cryptographic signature)
+       236 +  - ✅ **Signature Signing** - Signs outgoing requests for delivery to remote servers
+       237 +  - ✅ **Public Key Fetching** - Fetches and caches actor public keys with proper fragment handling
+       238 +  - ✅ **Configurable Security** - `require_http_signatures` config option (false for dev, true for production)
+       239 +  - ✅ **Inbox Integration** - Updated inbox endpoint with signature verification
+       240 +  - ✅ **Documentation** - Added comprehensive explanation of HTTP vs Linked Data signatures in README
+       241 +  
+       242 +  **Key Functions:**
+       243 +  - `verify_request()` - Complete request validation (digest + date + signature)
+       244 +  - `sign_request()` - Generate HTTP signature for outgoing requests
+       245 +  - `fetch_actor_public_key()` - Fetch public keys following ActivityPub spec
+       246 +  - `build_signing_string()` - Construct signing string per draft-cavage-12
+       247 +  - `compute_digest()` - SHA-256 digest computation for body integrity
+       248 +  
+       249 +  **Architecture Decisions:**
+       250 +  - Custom implementation (no library) - ActivityPub uses old draft spec (draft-cavage-12), not RFC 9421
+       251 +  - Algorithm `hs2019` per spec (not `rsa-sha256`)
+       252 +  - Fragment handling: Strip fragment for fetch, match full keyId including fragment
+       253 +  - Configurable enforcement: Accept unsigned in dev, require in production
+       254 +  - HTTP signatures only (Linked Data signatures documented for future consideration)
+       255   \ No newline at end of file
+
+● Update(docs/CLAUDE/CLAUDE.md)
+  ⎿  Updated docs/CLAUDE/CLAUDE.md with 28 additions and 15 removals                                                
+       178    
+       179    ## Critical TODO Items
+       180    
+       181 -  **High Priority (Security & Production Readiness):**
+       181 +  **Immediate Priority:**
+       182    
+       183 -  1. **Activity ID Naming System**
+       183 +  1. **Write Automated Tests for HTTP Signatures** ⚠️ **DO THIS FIRST**
+       184 +     - **Status**: Code implemented but untested
+       185 +     - **Requirements**:
+       186 +       - Test signature verification (valid, invalid, expired, missing headers)
+       187 +       - Test signature signing (correct format, algorithm, headers)
+       188 +       - Test public key fetching (with/without fragments, caching)
+       189 +       - Test digest computation and verification
+       190 +       - Test date validation (recent, expired, future)
+       191 +       - Test inbox with signature enforcement on/off
+       192 +     - **Priority**: CRITICAL - signature code is security-critical and must be tested before deployment
+       193 +     - **File**: `tests/test_http_signatures.py`
+       194 +  
+       195 +  **High Priority (Next Steps):**
+       196 +  
+       197 +  2. **Activity Delivery System**
+       198 +     - **Status**: Signatures implemented, delivery module next
+       199 +     - **Requirements**:
+       200 +       - Fetch actor inbox URLs
+       201 +       - Sign outgoing activities with `sign_request()`
+       202 +       - POST to follower inboxes
+       203 +       - Handle delivery errors and retries
+       204 +     - **Scope**: Complete bidirectional federation capability
+       205 +     - **File**: `activity_delivery.py`
+       206 +  
+       207 +  3. **Activity ID Naming System**
+       208       - **Problem**: Timestamp-based IDs cause conflicts when activities processed in same second
+       209       - **Solution**: Implement Content-Addressable Storage (CAS) using SHA-256 content hashes
+       210       - **Benefits**: Guaranteed uniqueness, immutability, easy duplicate detection
+       211       - **Example**: `accept-a7b9c3d2e1f4...` instead of `accept-20250927-234936`
+       212    
+       213 -  2. **Outbox Directory Organization**
+       213 +  4. **Outbox Directory Organization**
+       214       - **Problem**: Outgoing activities scattered in `static/activities/` with incoming posts
+       215       - **Solution**: Mirror inbox structure with dedicated outbox folders
+       216       - **Structure**: `static/outbox/` with `queue/` subdirectory for delivery
+       217       - **Benefits**: Clear separation, organized file management, future delivery queue
+       218    
+       219 -  3. **HTTP Signature Verification (CRITICAL)**
+       220 -     - **Problem**: Currently accepting activities without authentication (security vulnerability)
+       221 -     - **Solution**: Implement RFC 9421 HTTP Signature verification
+       222 -     - **Requirements**: Actor public key fetching, signature validation, error handling
+       223 -     - **Priority**: Essential before production deployment
+       224 -  
+       225 -  4. **Activity Delivery System**
+       226 -     - **Problem**: Generated Accept activities not sent to follower inboxes
+       227 -     - **Dependencies**: Requires HTTP signature implementation for outgoing signing
+       228 -     - **Solution**: POST signed activities to follower inbox endpoints
+       229 -     - **Scope**: Complete bidirectional federation capability
+       230 -  
+       219    **Implementation Notes:**
+       220 +  - **Testing First**: Always write tests for security-critical code before integration
+       221    - Use existing config system for new directory structures
+       222    - Leverage template system for consistent outgoing activity format
+       223    - Build on existing `generate_activity_id()` pattern for CAS implementation
+
+● Perfect! CLAUDE.md is updated with:
+  - ✅ HTTP Signatures progress documented
+  - ✅ TODO list updated with "Write Automated Tests" as #1 priority
+  - ✅ Clear requirements for what needs to be tested
+
+  Let me also check if we need to add dependencies to requirements.txt:
+
+● Read(requirements.txt)
+  ⎿  Read 4 lines (ctrl+o to expand)
+
+● Update(requirements.txt)
+  ⎿  Updated requirements.txt with 2 additions
+       1    Flask==3.1
+       2    pytest==7.4.3
+       3    Jinja2==3.1.4
+       4 +  cryptography==42.0.5
+       5 +  requests==2.31.0
+
+● Perfect! Everything is documented. Here's what's ready for you to commit:
+
+  Summary of Changes
+
+  Files Created:
+  - ✅ http_signatures.py - Complete HTTP signature implementation (verification + signing)
+
+  Files Modified:
+  - ✅ config.json.example - Added require_http_signatures: false option
+  - ✅ app.py - Updated inbox endpoint with signature verification
+  - ✅ README.md - Updated federation features, config options, and added Linked Data Signatures section
+  - ✅ docs/CLAUDE/CLAUDE.md - Documented progress and updated TODO list
+  - ✅ requirements.txt - Added cryptography and requests dependencies
+
+  What We Built
+
+  HTTP Signatures Module (http_signatures.py):
+  - verify_request() - Full incoming request validation
+  - sign_request() - Sign outgoing activities
+  - fetch_actor_public_key() - Fetch and cache public keys
+  - parse_signature_header() - Parse signature components
+  - build_signing_string() - Construct signing string
+  - compute_digest(), verify_digest(), verify_date() - Helper functions
+
+  Features:
+  - ✅ Follows draft-cavage-http-signatures-12 (ActivityPub standard)
+  - ✅ Configurable enforcement (dev vs production)
+  - ✅ Public key caching (1 hour TTL)
+  - ✅ Fragment handling per spec
+  - ✅ Digest + Date + Signature verification
+
+  Next Session: Write Tests First! ⚠️
+
+  The signature code is security-critical and MUST be tested before continuing with delivery. See docs/CLAUDE/CLAUDE.md for detailed test requirements.
+
+  Ready to commit when you are! 🎉
+
+
+
+

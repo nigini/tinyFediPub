@@ -52,7 +52,8 @@ All settings are externalized in `config.json`:
   },
   "security": {
     "public_key_file": "keys/public_key.pem",
-    "private_key_file": "keys/private_key.pem"
+    "private_key_file": "keys/private_key.pem",
+    "require_http_signatures": false
   }
 }
 ```
@@ -145,9 +146,11 @@ Current implementation supports `Article`/`Note` objects, `Create` activities, a
 - **Actor Profile** - Dynamic actor generation from config
 - **Outbox Collection** - Serves all published activities
 - **Individual Endpoints** - Posts and activities accessible via direct URLs
-- **Inbox Endpoint** - Receives activities from other federated servers
+- **Inbox Endpoint** - Receives activities from other federated servers with HTTP signature verification
 - **Followers Collection** - Manages and serves follower list
 - **Content Negotiation** - Proper ActivityPub headers and validation
+- **HTTP Signature Verification** - Cryptographic validation of incoming activities (configurable)
+- **HTTP Signature Signing** - Sign outgoing activities for secure delivery
 
 **File Structure:**
 ```
@@ -172,21 +175,22 @@ static/
 - Automatic follower management (configurable)
 
 **Configuration Options:**
-- `auto_accept_follow_requests` - Automatically accept follow requests (default: true)
-- Set to `false` for manual approval of followers
+- `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
+- `require_http_signatures` - Require HTTP signatures on all incoming activities (default: false). Set to `true` for production to reject unsigned server-to-server traffic
 
 ## What's Next
 
-**Completed (2025-09-27):**
+**Completed (2025-10-05):**
 - ✅ Follow request processing (add to followers, generate Accept activities)
 - ✅ Undo Follow processing (remove followers)
 - ✅ Extensible activity processor architecture with composite keys
+- ✅ HTTP signature verification for incoming activities (draft-cavage-http-signatures-12)
+- ✅ HTTP signature signing for outgoing activities
 
 **High Priority TODO:**
+- **Activity delivery system** - Send signed activities to follower inboxes (in progress)
 - **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
 - **Outbox folder organization** - Create dedicated outbox directory structure mirroring inbox organization for better file management
-- **HTTP signature verification** - Implement cryptographic signature validation for all incoming activities (critical for security)
-- **Activity delivery system** - Send activities to follower inboxes (depends on signature implementation for outgoing activity signing)
 
 **Future Enhancements:**
 - Manual follow approval workflow
@@ -222,3 +226,40 @@ Following relationships are fundamental to ActivityPub federation. The current a
 - Manual approval mode: requires processing pending requests
 
 **Note:** While ActivityPub spec defines standard collections (`/followers`, `/following`), many servers implement custom APIs for follow request management (e.g., Mastodon's `/api/v1/follow_requests`, Pleroma's similar endpoints). Future enhancements could add a `/pending-followers` endpoint for manual approval workflows.
+
+### Linked Data Signatures vs HTTP Signatures
+
+**Current Implementation:** HTTP Signatures (transport-layer, header-based)
+
+The fediverse currently uses **HTTP Signatures** (draft-cavage-http-signatures-12) which sign the HTTP request itself. The signature lives in the `Signature` header, and the activity JSON body remains clean without embedded signatures.
+
+**Alternative Approach:** Linked Data Signatures (object-layer, embedded)
+
+**Linked Data Signatures** embed cryptographic signatures directly in the ActivityPub JSON document:
+
+```json
+{
+  "type": "Follow",
+  "actor": "https://example.com/users/alice",
+  "object": "https://yourserver.com/actor",
+  "signature": {
+    "type": "RsaSignature2017",
+    "creator": "https://example.com/users/alice#main-key",
+    "created": "2025-01-05T12:00:00Z",
+    "signatureValue": "base64encodedstuff=="
+  }
+}
+```
+
+**Potential Advantages:**
+- **Persistence:** Signature travels with the activity when stored/forwarded
+- **Verification without transport:** Can verify authenticity of stored activities later
+- **Migration scenarios:** Verify integrity and authorship of archived activities
+- **Multi-hop federation:** Original signature preserved through forwarding
+
+**Why Not Implemented:**
+- More complex (requires JSON-LD canonicalization)
+- Mostly deprecated in modern fediverse (Mastodon, Pleroma use HTTP signatures)
+- HTTP signatures are simpler and cover the same security requirements for real-time federation
+
+**Future Consideration:** If activity archival, migration, or multi-hop forwarding become important use cases, adding support for embedded Linked Data Signatures alongside HTTP signatures could provide additional verification guarantees for stored content.

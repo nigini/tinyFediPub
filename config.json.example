@@ -15,7 +15,8 @@
   },
   "security": {
     "public_key_file": "keys/public_key.pem",
-    "private_key_file": "keys/private_key.pem"
+    "private_key_file": "keys/private_key.pem",
+    "require_http_signatures": false
   },
   "directories": {
     "inbox": "static/inbox",
