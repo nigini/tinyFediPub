@@ -27,14 +27,27 @@ def main():
         # Create post and activity
         post_obj, post_id = create_post(args.type, args.title, args.content, args.url, args.summary, args.id)
         activity_obj, activity_id = create_activity(post_obj, post_id)
-        
-        # Regenerate outbox
-        regenerate_outbox()
-        
+
         print(f"\n✅ Post created successfully!")
         print(f"Post ID: {post_id}")
         print(f"Activity ID: {activity_id}")
-        
+
+        # Regenerate outbox
+        regenerate_outbox()
+
+        # Deliver to followers
+        print("\n📤 Delivering to followers...")
+        from post_utils import load_config
+        import activity_delivery
+        config = load_config()
+        delivery_results = activity_delivery.deliver_to_followers(activity_obj, config)
+
+        # Show delivery summary
+        if delivery_results:
+            success_count = sum(1 for s in delivery_results.values() if s)
+            total_count = len(delivery_results)
+            print(f"✅ Delivered to {success_count}/{total_count} followers")
+
     except Exception as e:
         print(f"❌ Error: {e}")
         sys.exit(1)

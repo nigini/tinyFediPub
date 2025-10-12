@@ -95,7 +95,7 @@ Comprehensive test suite in `tests/` covering:
 - **Template System**: Outbox regeneration, streaming templates, error resilience
 - **Integration Tests**: End-to-end workflows and cross-component interactions
 
-**Test Stats**: 43 tests across 6 test files, all passing with proper isolation
+**Test Stats**: 95 tests across 7 test files, all passing with proper isolation
 
 ## Current Status
 
@@ -176,52 +176,27 @@ Comprehensive test suite in `tests/` covering:
 - ✅ **No Concurrency Issues** - Symlink-based queue prevents file conflicts
 - ✅ **Template-driven** - All ActivityPub entities generated consistently
 
-## Critical TODO Items
+## Future Enhancements
 
-**Immediate Priority:**
+**Recommended Improvements:**
 
-1. **Write Automated Tests for HTTP Signatures** ⚠️ **DO THIS FIRST**
-   - **Status**: Code implemented but untested
-   - **Requirements**:
-     - Test signature verification (valid, invalid, expired, missing headers)
-     - Test signature signing (correct format, algorithm, headers)
-     - Test public key fetching (with/without fragments, caching)
-     - Test digest computation and verification
-     - Test date validation (recent, expired, future)
-     - Test inbox with signature enforcement on/off
-   - **Priority**: CRITICAL - signature code is security-critical and must be tested before deployment
-   - **File**: `tests/test_http_signatures.py`
-
-**High Priority (Next Steps):**
-
-2. **Activity Delivery System**
-   - **Status**: Signatures implemented, delivery module next
-   - **Requirements**:
-     - Fetch actor inbox URLs
-     - Sign outgoing activities with `sign_request()`
-     - POST to follower inboxes
-     - Handle delivery errors and retries
-   - **Scope**: Complete bidirectional federation capability
-   - **File**: `activity_delivery.py`
-
-3. **Activity ID Naming System**
+1. **Activity ID Naming System**
    - **Problem**: Timestamp-based IDs cause conflicts when activities processed in same second
    - **Solution**: Implement Content-Addressable Storage (CAS) using SHA-256 content hashes
    - **Benefits**: Guaranteed uniqueness, immutability, easy duplicate detection
    - **Example**: `accept-a7b9c3d2e1f4...` instead of `accept-20250927-234936`
 
-4. **Outbox Directory Organization**
+2. **Outbox Directory Organization**
    - **Problem**: Outgoing activities scattered in `static/activities/` with incoming posts
    - **Solution**: Mirror inbox structure with dedicated outbox folders
    - **Structure**: `static/outbox/` with `queue/` subdirectory for delivery
    - **Benefits**: Clear separation, organized file management, future delivery queue
 
-**Implementation Notes:**
-- **Testing First**: Always write tests for security-critical code before integration
-- Use existing config system for new directory structures
-- Leverage template system for consistent outgoing activity format
-- Build on existing `generate_activity_id()` pattern for CAS implementation
-- Integrate with current processor architecture for delivery queue
+3. **Deprecation Warnings**
+   - **Problem**: `datetime.utcnow()` is deprecated in Python 3.12+
+   - **Location**: `post_utils.py:43`, `post_utils.py:104`, `post_utils.py:170`
+   - **Solution**: Replace with `datetime.now(datetime.UTC)`
+   - **Impact**: 50 deprecation warnings in test suite
 
 **Usage:**
 ```bash
@@ -264,3 +239,45 @@ ls static/activities/accept-*
 - Fragment handling: Strip fragment for fetch, match full keyId including fragment
 - Configurable enforcement: Accept unsigned in dev, require in production
 - HTTP signatures only (Linked Data signatures documented for future consideration)
+
+## Recent Progress (2025-10-12)
+
+**Activity Delivery System (Completed):**
+- ✅ **Implemented `activity_delivery.py`** - Complete delivery system with HTTP signature support
+- ✅ **Accept Activity Delivery** - Auto-deliver Accept responses when processing Follow activities
+- ✅ **Create Activity Delivery** - Auto-deliver new posts to all followers via `new_post.py`
+- ✅ **Inbox URL Fetching** - Fetches remote actor inbox URLs with proper ActivityPub headers
+- ✅ **Signed Requests** - All outgoing activities signed with HTTP signatures using actor's private key
+- ✅ **Error Handling** - Graceful handling of delivery failures with detailed logging
+- ✅ **Configurable User-Agent** - Uses config-based User-Agent string (defaults to 'TinyFedi/1.0')
+
+**Key Functions:**
+- `deliver_to_actor()` - Deliver activity to single actor (fetches inbox, signs, POSTs)
+- `deliver_to_followers()` - Broadcast activity to all followers with delivery summary
+- `deliver_activity()` - Core delivery function with HTTP signature authentication
+- `fetch_actor_inbox()` - Fetch inbox URL from remote actor document
+
+**Integration Points:**
+- `activity_processor.py` - Auto-delivers Accept activities when processing Follow requests
+- `new_post.py` - Auto-delivers Create activities to followers when publishing posts
+- Uses `http_signatures.sign_request()` for all outgoing activity authentication
+- Reads actor's publicKey.id from `actor.json` for dynamic key ID (no hardcoding)
+
+**Workflow:**
+1. Activity generated (Accept from processor, or Create from new_post.py)
+2. For each recipient: fetch their inbox URL from actor document
+3. Sign POST request with private key using HTTP signatures
+4. Deliver activity to remote inbox
+5. Log success/failure for each delivery
+
+**Test Coverage (Completed):**
+- ✅ **Implemented `tests/test_activity_delivery.py`** - Comprehensive unit tests for delivery module
+- ✅ **12 Delivery Tests** - All delivery functions tested with mocking
+- ✅ **Test Coverage Includes**:
+  - `fetch_actor_inbox()` - Success, missing inbox, network errors, custom User-Agent
+  - `deliver_activity()` - Success, network errors, missing actor keys
+  - `deliver_to_actor()` - Success, no inbox handling
+  - `deliver_to_followers()` - Success, partial failures, empty follower lists
+- ✅ **Total Test Suite** - 95 tests passing (83 existing + 12 new delivery tests)
+
+**Current Status**: tinyFedi now has **complete bidirectional federation** with **comprehensive test coverage** - can receive activities, process them, and deliver responses and new content to followers!

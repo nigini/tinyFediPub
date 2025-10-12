@@ -87,8 +87,15 @@ class FollowActivityProcessor(BaseActivityProcessor):
 
         print(f"Saved Accept activity to {activity_path}")
 
-        # TODO: Send Accept activity to follower's inbox (future implementation)
-        # This would involve HTTP POST to actor_url's inbox endpoint
+        # Deliver Accept activity to follower's inbox
+        import activity_delivery
+        success = activity_delivery.deliver_to_actor(accept_activity, actor_url, config)
+        if success:
+            print(f"✓ Delivered Accept activity to {actor_url}")
+        else:
+            print(f"✗ Failed to deliver Accept activity to {actor_url}")
+
+        return accept_activity
 
     def process(self, activity: dict, filename: str) -> bool:
         """Process Follow activity - auto-accept and add to followers"""
@@ -108,11 +115,9 @@ class FollowActivityProcessor(BaseActivityProcessor):
                 else:
                     print(f"Follower {actor_url} already exists")
 
-                # Generate Accept activity
+                # Generate and deliver Accept activity
                 self._generate_accept_activity(activity, actor_url)
-                print(f"Generated Accept activity for {actor_url}")
-
-                # TODO: Send Accept activity to follower's inbox (future implementation)
+                print(f"Generated and delivered Accept activity for {actor_url}")
             else:
                 print(f"Follow request from {actor_url} saved for manual review (auto-accept disabled)")
 
