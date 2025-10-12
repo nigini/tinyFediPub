@@ -276,3 +276,35 @@ class TestConfigMixin:
         self.assertEqual(len(files), 1,
                         f"Expected exactly 1 file in {directory_type}, found {len(files)}: {files}")
         return files[0]
+
+    def generate_test_rsa_keys(self):
+        """Generate RSA key pair for HTTP signature testing
+
+        Returns:
+            tuple: (private_key_pem, public_key_pem) as strings
+        """
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.backends import default_backend
+
+        # Generate test keys
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+            backend=default_backend()
+        )
+        public_key = private_key.public_key()
+
+        # Export to PEM format
+        private_key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        ).decode('utf-8')
+
+        public_key_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+
+        return private_key_pem, public_key_pem
