@@ -25,6 +25,8 @@ openssl genrsa -out keys/private_key.pem 2048
 openssl rsa -in keys/private_key.pem -pubout -out keys/public_key.pem
 ```
 
+**Security Note:** Keys are automatically excluded from version control via `.gitignore`.
+
 ### 2. Configuration
 
 Copy the example configuration file and customize it for your setup:
@@ -33,32 +35,12 @@ Copy the example configuration file and customize it for your setup:
 cp config.json.example config.json
 ```
 
-All settings are externalized in `config.json`:
+### 3. Take it for a Ride
 
-```json
-{
-  "server": {
-    "domain": "yourdomain.com",
-    "host": "0.0.0.0", 
-    "port": 5000,
-    "debug": false
-  },
-  "activitypub": {
-    "username": "blog",
-    "actor_name": "Your Blog Name",
-    "actor_summary": "Description of your blog",
-    "namespace": "activitypub",
-    "auto_accept_follow_requests": true
-  },
-  "security": {
-    "public_key_file": "keys/public_key.pem",
-    "private_key_file": "keys/private_key.pem",
-    "require_http_signatures": false
-  }
-}
+```bash
+python app.py
 ```
 
-**Security Note:** Keys are automatically excluded from version control via `.gitignore`.
 
 ## Deployment
 
@@ -73,9 +55,12 @@ location /activitypub/ {
 ## Usage
 
 1. Update `config.json` with your domain and actor details
-2. Run `python app.py` 
+2. Run `python app.py`
 3. Actor profile auto-generates from config on startup
 4. Add posts using the CLI: `./new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post"`
+5. Process incoming activities: `python activity_processor.py` (or set up as a cron job)
+
+**Note:** Activities received in the inbox are automatically queued. Run `activity_processor.py` to process Follow requests, add/remove followers, and send Accept responses. New posts are automatically delivered to followers when created.
 
 ## Development
 
@@ -169,10 +154,14 @@ static/
 ```
 
 **Current Capabilities:**
-- Others can discover your actor via WebFinger
-- Others can follow your actor and read your posts
-- You receive and store all incoming activities
-- Automatic follower management (configurable)
+- ✅ Others can discover your actor via WebFinger
+- ✅ Others can follow your actor and read your posts
+- ✅ You receive and process all incoming activities
+- ✅ Automatic follower management (add/remove followers)
+- ✅ Auto-respond to Follow requests with Accept activities
+- ✅ Deliver new posts to all followers automatically
+- ✅ HTTP signature verification for incoming activities (configurable)
+- ✅ HTTP signature signing for all outgoing deliveries
 
 **Configuration Options:**
 - `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
@@ -180,17 +169,28 @@ static/
 
 ## What's Next
 
-**Completed (2025-10-05):**
+**Completed (2025-10-12):**
 - ✅ Follow request processing (add to followers, generate Accept activities)
 - ✅ Undo Follow processing (remove followers)
 - ✅ Extensible activity processor architecture with composite keys
 - ✅ HTTP signature verification for incoming activities (draft-cavage-http-signatures-12)
 - ✅ HTTP signature signing for outgoing activities
+- ✅ **Activity delivery system** - Complete bidirectional federation with signed delivery to follower inboxes
+- ✅ **Comprehensive test suite** - 97 tests including unit tests and integration tests
 
-**High Priority TODO:**
-- **Activity delivery system** - Send signed activities to follower inboxes (in progress)
+**Current Status:**
+tinyFedi now has **complete bidirectional federation**! The server can:
+- Receive Follow requests and auto-respond with Accept
+- Manage followers (add/remove)
+- Deliver Accept activities back to followers
+- Deliver new posts to all followers with HTTP signatures
+- Process incoming activities through a queue system
+
+**Recommended Improvements:**
+- **Proper logging system** - Replace print() statements with Python's logging module
 - **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
 - **Outbox folder organization** - Create dedicated outbox directory structure mirroring inbox organization for better file management
+- **Deprecation fixes** - Replace datetime.utcnow() with datetime.now(datetime.UTC) for Python 3.12+
 
 **Future Enhancements:**
 - Manual follow approval workflow

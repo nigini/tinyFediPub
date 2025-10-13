@@ -14,7 +14,7 @@
   "publicKey": {
     "id": "{{ website_url }}/{{ namespace }}/actor#main-key",
     "owner": "{{ website_url }}/{{ namespace }}/actor",
-    "publicKeyPem": "{{ public_key_pem }}"
+    "publicKeyPem": {{ public_key_pem | tojson }}
   }{% if icon or image %},{% endif %}
   {% endif %}
   {% if icon %}
