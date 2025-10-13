@@ -95,7 +95,7 @@ Comprehensive test suite in `tests/` covering:
 - **Template System**: Outbox regeneration, streaming templates, error resilience
 - **Integration Tests**: End-to-end workflows and cross-component interactions
 
-**Test Stats**: 95 tests across 7 test files, all passing with proper isolation
+**Test Stats**: 97 tests across 8 test files, all passing with proper isolation
 
 ## Current Status
 
@@ -198,6 +198,31 @@ Comprehensive test suite in `tests/` covering:
    - **Solution**: Replace with `datetime.now(datetime.UTC)`
    - **Impact**: 50 deprecation warnings in test suite
 
+4. **Proper Logging System**
+   - **Problem**: Using `print()` statements throughout the codebase for logging
+   - **Location**: All modules - `app.py`, `activity_processor.py`, `activity_delivery.py`, `http_signatures.py`, etc.
+   - **Solution**: Implement Python's `logging` module with configurable levels (DEBUG, INFO, WARNING, ERROR)
+   - **Benefits**:
+     - Structured logging with timestamps and severity levels
+     - Configurable output (console, file, both)
+     - Can disable/filter logs in production
+     - Better for debugging and monitoring
+     - Integration with log aggregation tools
+   - **Configuration**: Add logging section to `config.json` with level and output file path
+   - **Example Structure**:
+     ```python
+     import logging
+
+     # Setup in each module
+     logger = logging.getLogger(__name__)
+
+     # Replace print() with appropriate level:
+     logger.debug("Detailed debugging information")
+     logger.info("General informational messages")
+     logger.warning("Warning messages")
+     logger.error("Error messages")
+     ```
+
 **Usage:**
 ```bash
 # Process queued activities
@@ -271,13 +296,17 @@ ls static/activities/accept-*
 5. Log success/failure for each delivery
 
 **Test Coverage (Completed):**
-- ✅ **Implemented `tests/test_activity_delivery.py`** - Comprehensive unit tests for delivery module
-- ✅ **12 Delivery Tests** - All delivery functions tested with mocking
-- ✅ **Test Coverage Includes**:
+- ✅ **Implemented `tests/test_activity_delivery.py`** - Comprehensive unit tests for delivery module (12 tests)
+- ✅ **Implemented `tests/test_integration_delivery.py`** - End-to-end workflow tests with mocked remote (2 tests)
+- ✅ **Unit Test Coverage**:
   - `fetch_actor_inbox()` - Success, missing inbox, network errors, custom User-Agent
   - `deliver_activity()` - Success, network errors, missing actor keys
   - `deliver_to_actor()` - Success, no inbox handling
   - `deliver_to_followers()` - Success, partial failures, empty follower lists
-- ✅ **Total Test Suite** - 95 tests passing (83 existing + 12 new delivery tests)
+- ✅ **Integration Test Coverage**:
+  - Complete Follow → Accept workflow with mocked remote actor
+  - Follow → Undo Follow state transitions
+  - Verifies: inbox saving, queue processing, follower management, Accept generation, delivery with signatures
+- ✅ **Total Test Suite** - 97 tests passing (83 existing + 12 unit + 2 integration tests)
 
 **Current Status**: tinyFedi now has **complete bidirectional federation** with **comprehensive test coverage** - can receive activities, process them, and deliver responses and new content to followers!
