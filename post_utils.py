@@ -5,7 +5,7 @@ Utilities for creating ActivityPub posts
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 from template_utils import templates
 
 def load_config():
@@ -40,7 +40,7 @@ def generate_post_id(title=None):
     Returns:
         str: Post ID like '20250913-143022' or '20250913-143022-my-post'
     """
-    timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+    timestamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')
 
     if title:
         suffix = slugify(title)
@@ -101,7 +101,7 @@ def generate_activity_id(activity_type):
     Returns:
         str: Activity ID like 'create-20250921-143022' or 'accept-20250921-143022'
     """
-    timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+    timestamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')
     return f"{activity_type.lower()}-{timestamp}"
 
 def parse_actor_url(actor_url):
@@ -167,7 +167,7 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
         post_id = generate_post_id(title)
 
     # Generate published timestamp
-    published = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    published = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
     # Create post object using appropriate template
     if post_type == 'article':

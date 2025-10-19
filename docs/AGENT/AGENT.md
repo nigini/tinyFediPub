@@ -178,94 +178,10 @@ Comprehensive test suite in `tests/` covering:
 
 ## Future Enhancements
 
-**Recommended Improvements:**
-
-1. **Activity ID Naming System**
-   - **Problem**: Timestamp-based IDs cause conflicts when activities processed in same second
-   - **Solution**: Implement Content-Addressable Storage (CAS) using SHA-256 content hashes
-   - **Benefits**: Guaranteed uniqueness, immutability, easy duplicate detection
-   - **Example**: `accept-a7b9c3d2e1f4...` instead of `accept-20250927-234936`
-
-2. **Outbox Directory Organization**
-   - **Problem**: Outgoing activities scattered in `static/activities/` with incoming posts
-   - **Solution**: Mirror inbox structure with dedicated outbox folders
-   - **Structure**: `static/outbox/` with `queue/` subdirectory for delivery
-   - **Benefits**: Clear separation, organized file management, future delivery queue
-
-3. **Deprecation Warnings**
-   - **Problem**: `datetime.utcnow()` is deprecated in Python 3.12+
-   - **Location**: `post_utils.py:43`, `post_utils.py:104`, `post_utils.py:170`
-   - **Solution**: Replace with `datetime.now(datetime.UTC)`
-   - **Impact**: 50 deprecation warnings in test suite
-
-4. **Proper Logging System**
-   - **Problem**: Using `print()` statements throughout the codebase for logging
-   - **Location**: All modules - `app.py`, `activity_processor.py`, `activity_delivery.py`, `http_signatures.py`, etc.
-   - **Solution**: Implement Python's `logging` module with configurable levels (DEBUG, INFO, WARNING, ERROR)
-   - **Benefits**:
-     - Structured logging with timestamps and severity levels
-     - Configurable output (console, file, both)
-     - Can disable/filter logs in production
-     - Better for debugging and monitoring
-     - Integration with log aggregation tools
-   - **Configuration**: Add logging section to `config.json` with level and output file path
-   - **Example Structure**:
-     ```python
-     import logging
-
-     # Setup in each module
-     logger = logging.getLogger(__name__)
-
-     # Replace print() with appropriate level:
-     logger.debug("Detailed debugging information")
-     logger.info("General informational messages")
-     logger.warning("Warning messages")
-     logger.error("Error messages")
-     ```
-
-5. **Like Activity Support (Phase 3: Full Spec Compliance)**
-   - **Problem**: Currently Like activities are received but not processed
-   - **Current Behavior**: Likes are saved to inbox and queued but remain unprocessed
-   - **ActivityPub Spec**: Objects can have an optional `likes` collection property
-   - **Implementation Approach**:
-     - Add `LikeActivityProcessor` to process incoming Like activities
-     - Implement per-post likes collection endpoint: `/posts/{post-id}/likes`
-     - Add `likes` property to post objects pointing to collection
-     - Store likes in per-post files: `static/posts/{post-id}-likes.json`
-     - Return OrderedCollection with list of actor URLs who liked the post
-     - Handle `Undo(Like)` for unlike actions
-   - **Collection Structure**:
-     ```json
-     {
-       "@context": "https://www.w3.org/ns/activitystreams",
-       "id": "https://yourblog.com/posts/my-post/likes",
-       "type": "OrderedCollection",
-       "totalItems": 2,
-       "orderedItems": [
-         "https://mastodon.social/users/alice",
-         "https://pixelfed.social/users/bob"
-       ]
-     }
-     ```
-   - **Benefits**: Full ActivityPub spec compliance, visibility into engagement
-   - **Note**: Phase 1 (just acknowledge) or Phase 2 (analytics only) may be sufficient for minimal blog use case
-
-**Usage:**
-```bash
-# Process queued activities
-python activity_processor.py
-
-# Check what activities are queued
-ls static/inbox/queue/
-
-# Check processed activities
-ls static/inbox/
-
-# Check generated Accept activities
-ls static/activities/accept-*
-```
-
-**Current Status**: The server now has **complete follow/unfollow processing** with proper delegation architecture. Next phase focuses on **security hardening** and **production deployment readiness**.
+**See README.md "What's Next" section for:**
+- Recommended improvements (logging, activity ID naming, outbox organization)
+- Future activity support (Update, Like, Announce, Delete)
+- Client-to-Server (C2S) considerations
 
 ## Recent Progress (2025-10-05)
 
@@ -337,3 +253,12 @@ ls static/activities/accept-*
 - ✅ **Total Test Suite** - 97 tests passing (83 existing + 12 unit + 2 integration tests)
 
 **Current Status**: tinyFedi now has **complete bidirectional federation** with **comprehensive test coverage** - can receive activities, process them, and deliver responses and new content to followers!
+
+## Recent Progress (2025-10-19)
+
+**Code Quality & Documentation:**
+- ✅ **Fixed Deprecation Warnings** - Replaced `datetime.utcnow()` with `datetime.now(UTC)` (Python 3.11+)
+- ✅ **README Updates** - Added Update, Like, Announce, Delete activity specifications with implementation notes
+- ✅ **C2S Documentation** - Added C2S vs Mastodon API comparison to "To Consider" section
+
+**Current Status**: S2S federation complete. Python 3.11+ required. Zero deprecation warnings. Documentation expanded with future feature roadmap.

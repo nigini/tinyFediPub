@@ -16,10 +16,23 @@ wanting to join the fediverse without a complex infrastructure.
 
 ## Tech Stack
 
+- **Python 3.11+** - Required for modern datetime handling
 - **Flask** - Lightweight web framework
 - **Jinja2** - Template engine for ActivityPub entities
 - **File-based storage** - All content served from static JSON files
 - **Zero dependencies** - Minimal external requirements
+
+**If you want to know more about how I implemented this software, and learn
+a lot about ActivityPub in the process, here are the posts (*you can also Follow 
+all updates at @blog@nigini.me - which is using this exact software to Federate):***
+
+1. [Building tinyFedi - part 1](https://nigini.me/blog/3-fediverse_server_part1):
+   Here we explore the basics of AP and build around Actors and its Outbox.
+2. [Building tinyFedi - part 2](https://nigini.me/blog/4-fediverse_server_part2):
+   We finish the basics by building around the Inbox and Activity delivery.
+3. Building tinyFedi - part 3: *coming soon* HTTP Signatures
+4. Building tinyFedi - part 4: *coming soon* Update, Like, and Annouce
+   Activities.
 
 ## Setup
 
@@ -177,12 +190,87 @@ static/
 - **Deprecation fixes** - Replace datetime.utcnow() with datetime.now(datetime.UTC) for Python 3.12+
 
 **Future Enhancements:**
+- **Update Activity Support** - Enable post editing with federated notifications
+  ```json
+  {
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "type": "Update",
+    "id": "https://yourblog.com/activities/update-abc123",
+    "actor": "https://yourblog.com/activitypub/actor",
+    "published": "2025-01-19T12:34:56Z",
+    "object": {
+      "type": "Article",
+      "id": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+      "attributedTo": "https://yourblog.com/activitypub/actor",
+      "published": "2025-09-21T14:30:22Z",
+      "updated": "2025-01-19T12:34:56Z",
+      "name": "Updated Title",
+      "content": "Updated content..."
+    }
+  }
+  ```
+  Key properties: `object.id` must match original post ID; `object` contains complete updated version; `object.updated` timestamp required. Implementation note: `edit_post.py` should accept only `--post-id`, then interactively prompt for each updatable field (title, content, summary, url) showing current values, allowing the user to make changes iteratively until confirming they're done.
+
+- **Like Activity Support** - Track post engagement with likes collection
+  ```json
+  {
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "type": "Like",
+    "id": "https://mastodon.social/users/alice/statuses/123456/activity",
+    "actor": "https://mastodon.social/users/alice",
+    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post"
+  }
+  ```
+  Key properties: `actor` identifies who liked; `object` references the post being liked. Implementation: Process incoming Like activities, maintain per-post likes collection at `/posts/{id}/likes` endpoint, add `likes` property to post objects pointing to collection, handle `Undo(Like)` for unlikes. See [ActivityPub §5.7](https://www.w3.org/TR/activitypub/#likes).
+
+- **Announce Activity Support** - Track post shares/boosts collection
+  ```json
+  {
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "type": "Announce",
+    "id": "https://mastodon.social/users/bob/statuses/789012/activity",
+    "actor": "https://mastodon.social/users/bob",
+    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+    "published": "2025-01-19T15:30:00Z"
+  }
+  ```
+  Key properties: `actor` identifies who shared; `object` references the post being announced. Implementation: Process incoming Announce activities, maintain per-post shares collection at `/posts/{id}/shares` endpoint, add `shares` property to post objects pointing to collection, handle `Undo(Announce)` for unshares. See [ActivityPub §5.8](https://www.w3.org/TR/activitypub/#shares).
+
+- **Delete Activity Support** - Remove posts from federation with tombstoning
+  ```json
+  {
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "type": "Delete",
+    "id": "https://yourblog.com/activities/delete-abc123",
+    "actor": "https://yourblog.com/activitypub/actor",
+    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+    "published": "2025-01-19T16:00:00Z"
+  }
+  ```
+  Key properties: `actor` is the deleter; `object` references the post being deleted. Implementation: `delete_post.py` CLI replaces post file with Tombstone object (preserves references in conversations), creates Delete activity, delivers to all followers. Tombstone includes `deleted` timestamp and returns 200 OK instead of 410 Gone to maintain conversation integrity. See [ActivityPub §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox).
+
 - Manual follow approval workflow
-- Support for Like, Announce, Update, and other activity types
 - Mention and reply handling
 - Clients endpoints
 
 ## To Consider
+
+### Client-to-Server (C2S) Protocol and Mastodon API Compatibility
+
+**Current Implementation:** tinyFedi implements only the Server-to-Server (S2S) protocol for federation. Content creation happens via CLI tools (`new_post.py`), which is ideal for blog use cases.
+
+**The C2S vs Mastodon API Debate:** The ActivityPub specification includes a Client-to-Server (C2S) protocol, but it has seen almost no real-world adoption. Mastodon rejected C2S support in 2019, arguing the spec was too barebones (lacking notifications, search, autocomplete, blocking, muting) and would require so much custom vocabulary that "you might as well just use the Mastodon REST API." Instead, Mastodon's proprietary API became the de facto standard, with other platforms (Pleroma, Misskey) implementing Mastodon API compatibility rather than C2S.
+
+| Aspect | ActivityPub C2S | Mastodon API |
+|--------|----------------|--------------|
+| **Philosophy** | Protocol-first, thin server | Feature-rich, thick server |
+| **Scope** | Minimal (POST activities, GET collections) | Comprehensive (notifications, search, filters, muting, blocking) |
+| **Interoperability** | Works across any C2S implementation | Mastodon-specific (but copied by others) |
+| **Adoption** | Almost none | Universal in Fediverse |
+
+**Third-Party Client Support:** Popular Fediverse clients (Tusky, Ivory, Mast, Elk) expect Mastodon API compatibility, which requires: (1) OAuth 2.0 authentication flow with `/oauth/authorize` and `/oauth/token` endpoints, (2) Mastodon-compatible API endpoints like `/api/v1/statuses`, and (3) specific OAuth scopes (`read`, `write`, `follow`). The ActivityPub Client-to-Server protocol alone is insufficient - clients expect the full Mastodon API surface.
+
+**Alternative Approaches:** Simple authentication methods (Bearer tokens, HTTP Basic Auth) would enable custom web interfaces or curl-based posting but won't work with existing mobile apps. Implementing full Mastodon API compatibility is a significant undertaking that essentially requires reimplementing Mastodon's client-facing layer.
 
 ### Linked Data Signatures vs HTTP Signatures
 
