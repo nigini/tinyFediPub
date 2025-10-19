@@ -1,10 +1,18 @@
-# tinyFedi.pub
+# tinyFedi
 
 A minimalist ActivityPub server designed for easy integration with personal websites.
 
 ## Overview
 
-Simple file-based ActivityPub implementation that serves federated content from static JSON files. Perfect for personal blogs and small websites wanting to join the fediverse without complex infrastructure.
+Simple file-based ActivityPub implementation that serves federated content 
+from static JSON files. Perfect for personal blogs and small websites 
+wanting to join the fediverse without a complex infrastructure.
+
+<div style="text-align:center">
+    <img src="./docs/images/tinyfedi1.png" 
+    style="width:70%; min-width:500px; max-width:800px" 
+    alt="tinyFedi connects content, like blog posts, to the Fediverse">
+</div>
 
 ## Tech Stack
 
@@ -35,11 +43,28 @@ Copy the example configuration file and customize it for your setup:
 cp config.json.example config.json
 ```
 
+**!!!** Actor's profile auto-generates from config on startup
+
 ### 3. Take it for a Ride
 
 ```bash
 python app.py
 ```
+
+Add posts using the CLI: 
+
+```bash
+./new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post"`
+```
+**Note:** New posts are automatically delivered to followers when created.
+
+Process incoming activities: 
+
+```bash
+python activity_processor.py` #or set up as a cron job
+```
+**Note:** Activities received in the inbox are automatically queued to be 
+processed! 
 
 
 ## Deployment
@@ -51,16 +76,6 @@ location /activitypub/ {
     proxy_pass http://localhost:5000/activitypub/;
 }
 ```
-
-## Usage
-
-1. Update `config.json` with your domain and actor details
-2. Run `python app.py`
-3. Actor profile auto-generates from config on startup
-4. Add posts using the CLI: `./new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post"`
-5. Process incoming activities: `python activity_processor.py` (or set up as a cron job)
-
-**Note:** Activities received in the inbox are automatically queued. Run `activity_processor.py` to process Follow requests, add/remove followers, and send Accept responses. New posts are automatically delivered to followers when created.
 
 ## Development
 
@@ -84,19 +99,6 @@ This project uses a comprehensive test isolation strategy to ensure reliable tes
 - Import app modules INSIDE test methods, AFTER `setUp()` runs
 
 **See `tests/test_config.py`** for complete documentation, usage patterns, helper methods, and implementation details of the test configuration strategy.
-
-### Creating Posts
-
-Use the CLI tool to create new ActivityPub posts:
-
-```bash
-./new_post.py --title "My Post" --content "Post content" --url "https://myblog.com/my-post" --summary "Optional summary"
-```
-
-This automatically:
-- Creates the post JSON in `static/posts/`
-- Generates the Create activity in `static/activities/`
-- Regenerates the outbox collection
 
 ## Template System
 
@@ -122,7 +124,6 @@ templates/
 - **Spec-compliant** - Templates ensure proper ActivityPub/ActivityStreams structure
 - **Configurable** - All values injected from `config.json` and runtime data
 
-Current implementation supports `Article`/`Note` objects, `Create` activities, and `Collection` types (outbox, followers), with template structure ready for future ActivityStreams types.
 
 ## Federation Features
 
@@ -169,23 +170,6 @@ static/
 
 ## What's Next
 
-**Completed (2025-10-12):**
-- ✅ Follow request processing (add to followers, generate Accept activities)
-- ✅ Undo Follow processing (remove followers)
-- ✅ Extensible activity processor architecture with composite keys
-- ✅ HTTP signature verification for incoming activities (draft-cavage-http-signatures-12)
-- ✅ HTTP signature signing for outgoing activities
-- ✅ **Activity delivery system** - Complete bidirectional federation with signed delivery to follower inboxes
-- ✅ **Comprehensive test suite** - 97 tests including unit tests and integration tests
-
-**Current Status:**
-tinyFedi now has **complete bidirectional federation**! The server can:
-- Receive Follow requests and auto-respond with Accept
-- Manage followers (add/remove)
-- Deliver Accept activities back to followers
-- Deliver new posts to all followers with HTTP signatures
-- Process incoming activities through a queue system
-
 **Recommended Improvements:**
 - **Proper logging system** - Replace print() statements with Python's logging module
 - **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
@@ -194,38 +178,11 @@ tinyFedi now has **complete bidirectional federation**! The server can:
 
 **Future Enhancements:**
 - Manual follow approval workflow
-- Support for Like, Announce, and other activity types
+- Support for Like, Announce, Update, and other activity types
 - Mention and reply handling
-- Custom endpoints for follow request management
+- Clients endpoints
 
 ## To Consider
-
-### Activity Processing Strategy
-
-The inbox receives various ActivityPub activities that require different processing approaches:
-
-**Activities requiring action:**
-- **Follow** - Add to followers collection, generate Accept/Reject response
-- **Undo(Follow)** - Remove from followers collection
-- **Like/Announce** - Optional analytics tracking
-- **Create/Update/Delete** - Handle mentions or replies to your posts
-
-**Activities that are informational:**
-- **Accept/Reject** - Responses to your outgoing Follow requests (log only)
-
-**Processing Queue:**
-Current implementation uses `static/inbox/TO_DO.json` to track activities needing processing, allowing for:
-- Automatic processing (with `auto_accept_follow_requests: true` config)
-- Manual approval workflows (scan unprocessed activities)
-- Selective processing by activity type
-
-**Follow Requests - Special Case:**
-Following relationships are fundamental to ActivityPub federation. The current approach:
-- All Follow activities saved to inbox for audit trail
-- Auto-accept mode: immediately add to followers and generate Accept activity
-- Manual approval mode: requires processing pending requests
-
-**Note:** While ActivityPub spec defines standard collections (`/followers`, `/following`), many servers implement custom APIs for follow request management (e.g., Mastodon's `/api/v1/follow_requests`, Pleroma's similar endpoints). Future enhancements could add a `/pending-followers` endpoint for manual approval workflows.
 
 ### Linked Data Signatures vs HTTP Signatures
 
@@ -261,5 +218,3 @@ The fediverse currently uses **HTTP Signatures** (draft-cavage-http-signatures-1
 - More complex (requires JSON-LD canonicalization)
 - Mostly deprecated in modern fediverse (Mastodon, Pleroma use HTTP signatures)
 - HTTP signatures are simpler and cover the same security requirements for real-time federation
-
-**Future Consideration:** If activity archival, migration, or multi-hop forwarding become important use cases, adding support for embedded Linked Data Signatures alongside HTTP signatures could provide additional verification guarantees for stored content.

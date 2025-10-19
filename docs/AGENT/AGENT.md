@@ -223,6 +223,33 @@ Comprehensive test suite in `tests/` covering:
      logger.error("Error messages")
      ```
 
+5. **Like Activity Support (Phase 3: Full Spec Compliance)**
+   - **Problem**: Currently Like activities are received but not processed
+   - **Current Behavior**: Likes are saved to inbox and queued but remain unprocessed
+   - **ActivityPub Spec**: Objects can have an optional `likes` collection property
+   - **Implementation Approach**:
+     - Add `LikeActivityProcessor` to process incoming Like activities
+     - Implement per-post likes collection endpoint: `/posts/{post-id}/likes`
+     - Add `likes` property to post objects pointing to collection
+     - Store likes in per-post files: `static/posts/{post-id}-likes.json`
+     - Return OrderedCollection with list of actor URLs who liked the post
+     - Handle `Undo(Like)` for unlike actions
+   - **Collection Structure**:
+     ```json
+     {
+       "@context": "https://www.w3.org/ns/activitystreams",
+       "id": "https://yourblog.com/posts/my-post/likes",
+       "type": "OrderedCollection",
+       "totalItems": 2,
+       "orderedItems": [
+         "https://mastodon.social/users/alice",
+         "https://pixelfed.social/users/bob"
+       ]
+     }
+     ```
+   - **Benefits**: Full ActivityPub spec compliance, visibility into engagement
+   - **Note**: Phase 1 (just acknowledge) or Phase 2 (analytics only) may be sufficient for minimal blog use case
+
 **Usage:**
 ```bash
 # Process queued activities
