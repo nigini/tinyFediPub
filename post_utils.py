@@ -201,6 +201,66 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
     
     return post, post_id
 
+def update_post(post_id, title=None, content=None, url=None, summary=None):
+    """
+    Update an existing post and add 'updated' timestamp
+
+    Args:
+        post_id: Post ID to update
+        title: New title (None to keep existing)
+        content: New content (None to keep existing)
+        url: New URL (None to keep existing)
+        summary: New summary (None to keep existing)
+
+    Returns:
+        tuple: (updated_post_object, post_id, was_modified)
+        where was_modified is True if any changes were made
+    """
+    import os
+
+    config = load_config()
+    posts_dir = config['directories']['posts']
+    post_path = os.path.join(posts_dir, f'{post_id}.json')
+
+    # Load existing post
+    if not os.path.exists(post_path):
+        raise FileNotFoundError(f"Post not found: {post_id}")
+
+    with open(post_path, 'r') as f:
+        post = json.load(f)
+
+    # Check if any changes are being made
+    has_changes = any([
+        title is not None,
+        content is not None,
+        url is not None,
+        summary is not None
+    ])
+
+    # If no changes, return unchanged post
+    if not has_changes:
+        return post, post_id, False
+
+    # Update fields if provided
+    if title is not None:
+        post['name'] = title
+    if content is not None:
+        post['content'] = content
+    if url is not None:
+        post['url'] = url
+    if summary is not None:
+        post['summary'] = summary
+
+    # Add updated timestamp
+    post['updated'] = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    # Save updated post
+    with open(post_path, 'w') as f:
+        json.dump(post, f, indent=2)
+    print(f"✓ Updated post: {post_path}")
+
+    return post, post_id, True
+
 def get_actor_info():
     """
     Get actor information from generated actor.json
@@ -219,6 +279,29 @@ def get_actor_info():
         print("Warning: actor.json not found. Run the server first to generate it.")
         return None
 
+def save_activity_file(activity, activity_id, config):
+    """
+    Save activity object to file
+
+    Args:
+        activity: Activity object to save
+        activity_id: Activity ID (filename without extension)
+        config: Configuration dictionary
+
+    Returns:
+        str: Path to saved activity file
+    """
+    import os
+
+    activities_dir = config['directories']['activities']
+    os.makedirs(activities_dir, exist_ok=True)
+    activity_path = os.path.join(activities_dir, f'{activity_id}.json')
+
+    with open(activity_path, 'w') as f:
+        json.dump(activity, f, indent=2)
+
+    return activity_path
+
 def create_activity(post_object, post_id):
     """
     Create a Create activity that wraps the post and save to file
@@ -232,7 +315,8 @@ def create_activity(post_object, post_id):
     """
     import os
     
-    # Get actor info from the actual served file
+    # Get configuration and actor info
+    config = load_config()
     actor = get_actor_info()
     if not actor:
         raise Exception("Cannot create activity: actor.json not found. Please run the server first.")
@@ -240,9 +324,9 @@ def create_activity(post_object, post_id):
     # Generate activity ID
     activity_id = generate_activity_id('create')
 
-    # Extract domain/namespace from actor ID
+    # Get base URL and actor ID
+    base_url = generate_base_url(config)
     actor_id = actor['id']
-    base_url = actor_id.rsplit('/actor', 1)[0]  # Remove '/actor' suffix
 
     # Create activity object using template
     activity = templates.render_create_activity(
@@ -251,16 +335,50 @@ def create_activity(post_object, post_id):
         published=post_object["published"],
         post_object=post_object
     )
-    
+
     # Save activity file
-    config = load_config()
-    activities_dir = config['directories']['activities']
-    os.makedirs(activities_dir, exist_ok=True)
-    activity_path = os.path.join(activities_dir, f'{activity_id}.json')
-    with open(activity_path, 'w') as f:
-        json.dump(activity, f, indent=2)
+    activity_path = save_activity_file(activity, activity_id, config)
     print(f"✓ Created activity: {activity_path}")
-    
+
+    return activity, activity_id
+
+def create_update_activity(post_object, post_id):
+    """
+    Create an Update activity that wraps the updated post and save to file
+
+    Args:
+        post_object: The updated post object from update_post()
+        post_id: The post ID
+
+    Returns:
+        tuple: (activity_object, activity_id)
+    """
+    # Get configuration and actor info
+    config = load_config()
+    actor = get_actor_info()
+    if not actor:
+        raise Exception("Cannot create activity: actor.json not found. Please run the server first.")
+
+    # Generate activity ID
+    activity_id = generate_activity_id('update')
+
+    # Get base URL and actor ID
+    base_url = generate_base_url(config)
+    actor_id = actor['id']
+
+    # Create activity object using template (use 'updated' timestamp if available)
+    published_time = post_object.get("updated", post_object["published"])
+    activity = templates.render_update_activity(
+        activity_id=f"{base_url}/activities/{activity_id}",
+        actor_id=actor_id,
+        published=published_time,
+        post_object=post_object
+    )
+
+    # Save activity file
+    activity_path = save_activity_file(activity, activity_id, config)
+    print(f"✓ Created Update activity: {activity_path}")
+
     return activity, activity_id
 
 def regenerate_outbox():

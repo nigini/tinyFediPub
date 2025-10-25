@@ -24,7 +24,10 @@ cp config.json.example config.json
 python app.py
 
 # Create new posts
-./new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post" --summary "Optional"
+./client/new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post" --summary "Optional"
+
+# Edit existing posts
+./client/edit_post.py --post-id "20250101-120000-my-post"
 ```
 
 **Testing:**
@@ -70,10 +73,16 @@ curl -H "Accept: application/activity+json" http://localhost:5000/activitypub/po
 - `static/outbox.json` - Generated dynamically from activities directory
 
 **Post Creation Workflow:**
-1. CLI tool (`new_post.py`) creates post JSON with timestamp+slug ID
+1. CLI tool (`client/new_post.py`) creates post JSON with timestamp+slug ID
 2. CLI creates corresponding Create activity wrapping the post
 3. CLI regenerates outbox by scanning activities directory (append-only)
 4. Server serves all files without restart needed (Flask auto-reload in debug mode)
+
+**Post Update Workflow:**
+1. CLI tool (`client/edit_post.py`) loads existing post and prompts for changes
+2. CLI updates post JSON and adds 'updated' timestamp
+3. CLI creates corresponding Update activity wrapping the modified post
+4. CLI regenerates outbox and delivers Update activity to all followers
 
 **Key Features:**
 - **Memory efficient**: Outbox streams from files without loading all activities (using Jinja2 generators)

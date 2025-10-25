@@ -64,12 +64,19 @@ cp config.json.example config.json
 python app.py
 ```
 
-Add posts using the CLI: 
+Add posts using the CLI:
 
 ```bash
-./new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post"`
+./client/new_post.py --title "Post Title" --content "Content" --url "https://yourblog.com/post"
 ```
 **Note:** New posts are automatically delivered to followers when created.
+
+Edit existing posts:
+
+```bash
+./client/edit_post.py --post-id "20250101-120000-my-post"
+```
+**Note:** Updated posts are automatically delivered to followers when edited.
 
 Process incoming activities: 
 
@@ -257,7 +264,7 @@ static/
 
 ### Client-to-Server (C2S) Protocol and Mastodon API Compatibility
 
-**Current Implementation:** tinyFedi implements only the Server-to-Server (S2S) protocol for federation. Content creation happens via CLI tools (`new_post.py`), which is ideal for blog use cases.
+**Current Implementation:** tinyFedi implements only the Server-to-Server (S2S) protocol for federation. Content creation and editing happens via CLI tools (`client/new_post.py`, `client/edit_post.py`), which is ideal for blog use cases.
 
 **The C2S vs Mastodon API Debate:** The ActivityPub specification includes a Client-to-Server (C2S) protocol, but it has seen almost no real-world adoption. Mastodon rejected C2S support in 2019, arguing the spec was too barebones (lacking notifications, search, autocomplete, blocking, muting) and would require so much custom vocabulary that "you might as well just use the Mastodon REST API." Instead, Mastodon's proprietary API became the de facto standard, with other platforms (Pleroma, Misskey) implementing Mastodon API compatibility rather than C2S.
 
