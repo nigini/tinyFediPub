@@ -194,29 +194,27 @@ static/
 - **Proper logging system** - Replace print() statements with Python's logging module
 - **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
 - **Outbox folder organization** - Create dedicated outbox directory structure mirroring inbox organization for better file management
-- **Deprecation fixes** - Replace datetime.utcnow() with datetime.now(datetime.UTC) for Python 3.12+
+
+**Completed:**
+- ✅ **Deprecation fixes** - datetime.utcnow() replaced with datetime.now(UTC) for Python 3.11+ compatibility
+- ✅ **Update Activity Support** - Post editing with federated notifications (outgoing only). Use `./client/edit_post.py --post-id <id>` to edit posts interactively.
 
 **Future Enhancements:**
-- **Update Activity Support** - Enable post editing with federated notifications
+
+- **Emoji Reactions (EmojiReact)** - Rich reaction support beyond binary like/dislike ([FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md))
   ```json
   {
-    "@context": "https://www.w3.org/ns/activitystreams",
-    "type": "Update",
-    "id": "https://yourblog.com/activities/update-abc123",
-    "actor": "https://yourblog.com/activitypub/actor",
-    "published": "2025-01-19T12:34:56Z",
-    "object": {
-      "type": "Article",
-      "id": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
-      "attributedTo": "https://yourblog.com/activitypub/actor",
-      "published": "2025-09-21T14:30:22Z",
-      "updated": "2025-01-19T12:34:56Z",
-      "name": "Updated Title",
-      "content": "Updated content..."
-    }
+    "@context": [
+      "https://www.w3.org/ns/activitystreams",
+      {"litepub": "http://litepub.social/ns#", "EmojiReact": "litepub:EmojiReact"}
+    ],
+    "type": "EmojiReact",
+    "actor": "https://mastodon.social/users/alice",
+    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+    "content": "🔥"
   }
   ```
-  Key properties: `object.id` must match original post ID; `object` contains complete updated version; `object.updated` timestamp required. Implementation note: `edit_post.py` should accept only `--post-id`, then interactively prompt for each updatable field (title, content, summary, url) showing current values, allowing the user to make changes iteratively until confirming they're done.
+  Implementation: Process incoming EmojiReact activities, maintain per-post reactions grouped by emoji at `/posts/{id}/reactions` endpoint. Handle both unicode emoji and custom emoji (with `tag` array containing Emoji objects). Support `Undo(EmojiReact)` for removing reactions. Backward compatible with `Like` activities containing `content`. Estimated effort: ~500-700 lines (processors, endpoints, collections, tests).
 
 - **Like Activity Support** - Track post engagement with likes collection
   ```json
