@@ -151,5 +151,35 @@ class TestPostUpdate(unittest.TestCase, TestConfigMixin):
         self.assertNotIn('updated', updated_post)
 
 
+class TestLoadExistingPost(unittest.TestCase, TestConfigMixin):
+    """Tests for client/edit_post.py load_existing_post()"""
+
+    def setUp(self):
+        self.setup_test_environment("load_existing_post")
+        self.create_test_actor()
+
+    def tearDown(self):
+        self.teardown_test_environment()
+
+    def test_load_existing_post(self):
+        """Test loading a post that exists"""
+        from client.edit_post import load_existing_post
+
+        post_obj, post_id = create_post(
+            'article', 'Test Title', 'Test content', 'https://example.com/post'
+        )
+
+        loaded = load_existing_post(post_id)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded['name'], 'Test Title')
+
+    def test_load_nonexistent_post(self):
+        """Test loading a post that doesn't exist"""
+        from client.edit_post import load_existing_post
+
+        loaded = load_existing_post('nonexistent-id')
+        self.assertIsNone(loaded)
+
+
 if __name__ == '__main__':
     unittest.main()

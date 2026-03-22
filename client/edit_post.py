@@ -12,15 +12,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from post_utils import (
     load_config, update_post, create_update_activity,
-    regenerate_outbox
+    regenerate_outbox, get_post_path
 )
 
 
 def load_existing_post(post_id):
     """Load existing post from file"""
     config = load_config()
-    posts_dir = config['directories']['posts']
-    post_path = os.path.join(posts_dir, f'{post_id}.json')
+    post_path = get_post_path(post_id, config)
 
     if not os.path.exists(post_path):
         print(f"❌ Error: Post '{post_id}' not found")

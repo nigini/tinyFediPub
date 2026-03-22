@@ -18,7 +18,6 @@ def main():
     parser.add_argument('--content', required=True, help='Post content')
     parser.add_argument('--url', required=True, help='Full URL where post can be read')
     parser.add_argument('--summary', help='Optional post summary')
-    parser.add_argument('--id', help='Custom post ID (default: auto-generated)')
 
     args = parser.parse_args()
 
@@ -30,7 +29,7 @@ def main():
     
     try:
         # Create post and activity
-        post_obj, post_id = create_post(args.type, args.title, args.content, args.url, args.summary, args.id)
+        post_obj, post_id = create_post(args.type, args.title, args.content, args.url, args.summary)
         activity_obj, activity_id = create_activity(post_obj, post_id)
 
         print(f"\n✅ Post created successfully!")

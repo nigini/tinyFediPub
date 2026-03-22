@@ -4,7 +4,6 @@ Utilities for creating ActivityPub posts
 """
 import json
 import os
-import re
 import uuid
 from datetime import datetime, UTC
 from template_utils import templates
@@ -24,12 +23,6 @@ def load_config():
         print(f"❌ Error: config.json is not valid JSON: {e}")
         print("Please check the file format and try again.")
         raise SystemExit(1)
-
-def slugify(text):
-    """Convert text to URL-safe slug"""
-    slug = re.sub(r'[^\w\s-]', '', text.lower())
-    slug = re.sub(r'[-\s]+', '-', slug)
-    return slug.strip('-')[:30]  # Limit length
 
 def generate_post_id():
     """
@@ -148,7 +141,7 @@ def parse_actor_url(actor_url):
     except Exception:
         return ('unknown', None)
 
-def create_post(post_type, title, content, url, summary=None, post_id=None):
+def create_post(post_type, title, content, url, summary=None):
     """
     Create a post JSON object and save to file
 
@@ -158,18 +151,14 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
         content: Post content
         url: Full URL where post can be read (e.g., blog post URL)
         summary: Optional summary
-        post_id: Custom post ID, auto-generated if None
 
     Returns:
         tuple: (post_object, post_id)
     """
     import os
-    
+
     config = load_config()
-    
-    # Generate post ID if not provided
-    if post_id is None:
-        post_id = generate_post_id()
+    post_id = generate_post_id()
 
     # Generate published timestamp
     published = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
