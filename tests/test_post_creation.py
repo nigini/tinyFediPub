@@ -64,11 +64,11 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         # Check ID format
         self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
         
-        # Check file was created
-        self.assert_file_exists('posts', f'{post_id}.json')
+        # Check file was created in directory structure
+        self.assert_file_exists('posts', f'{post_id}/post.json')
 
         # Verify file contents
-        post_path = self.get_test_file_path('posts', f'{post_id}.json')
+        post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
@@ -95,11 +95,11 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         # Check ID format
         self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
 
-        # Check file was created
-        self.assert_file_exists('posts', f'{post_id}.json')
+        # Check file was created in directory structure
+        self.assert_file_exists('posts', f'{post_id}/post.json')
 
         # Verify file contents
-        post_path = self.get_test_file_path('posts', f'{post_id}.json')
+        post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
@@ -301,7 +301,7 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
         regenerate_outbox()
         
         # Verify all files were created
-        self.assert_file_exists('posts', f'{post_id}.json')
+        self.assert_file_exists('posts', f'{post_id}/post.json')
         self.assert_file_exists('activities', f'{activity_id}.json')
         self.assert_file_exists('outbox', 'outbox.json')
 
@@ -309,7 +309,7 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
         outbox_path = self.get_test_file_path('outbox', 'outbox.json')
         with open(outbox_path, 'r') as f:
             outbox = json.load(f)
-        
+
         self.assertEqual(outbox['totalItems'], 1)
         self.assertEqual(outbox['orderedItems'][0]['object'], f"https://cli-test.example.com/activitypub/posts/{post_id}")
 
@@ -328,12 +328,12 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
         regenerate_outbox()
 
         # Verify all files were created
-        self.assert_file_exists('posts', f'{post_id}.json')
+        self.assert_file_exists('posts', f'{post_id}/post.json')
         self.assert_file_exists('activities', f'{activity_id}.json')
         self.assert_file_exists('outbox', 'outbox.json')
 
         # Verify post is a Note type
-        post_path = self.get_test_file_path('posts', f'{post_id}.json')
+        post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
         with open(post_path, 'r') as f:
             post = json.load(f)
         self.assertEqual(post['type'], 'Note')

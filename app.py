@@ -117,7 +117,11 @@ def outbox():
 def post(post_id):
     """Individual post objects"""
     try:
-        response = jsonify(load_json_file(f'posts/{post_id}.json'))
+        from post_utils import get_post_path, load_config as load_post_config
+        post_path = get_post_path(post_id, load_post_config())
+        with open(post_path, 'r') as f:
+            post_data = json.load(f)
+        response = jsonify(post_data)
         response.headers['Content-Type'] = CONTENT_TYPE_AP
         return response
     except FileNotFoundError:

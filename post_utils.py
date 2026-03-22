@@ -40,6 +40,20 @@ def generate_post_id():
     """
     return str(uuid.uuid4())
 
+def get_post_path(post_id, config):
+    """
+    Get the filesystem path to a post's JSON file
+
+    Args:
+        post_id: Post UUID
+        config: Configuration dictionary
+
+    Returns:
+        str: Path like 'static/posts/{uuid}/post.json'
+    """
+    posts_dir = config['directories']['posts']
+    return os.path.join(posts_dir, post_id, 'post.json')
+
 def generate_base_url(config):
     """
     Generate base ActivityPub URL from config
@@ -181,11 +195,10 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
             published=published
         )
     
-    # Save post file
+    # Save post file in dedicated directory
     config = load_config()
-    posts_dir = config['directories']['posts']
-    os.makedirs(posts_dir, exist_ok=True)
-    post_path = os.path.join(posts_dir, f'{post_id}.json')
+    post_path = get_post_path(post_id, config)
+    os.makedirs(os.path.dirname(post_path), exist_ok=True)
     with open(post_path, 'w') as f:
         json.dump(post, f, indent=2)
     print(f"✓ Created post: {post_path}")
@@ -210,8 +223,7 @@ def update_post(post_id, title=None, content=None, url=None, summary=None):
     import os
 
     config = load_config()
-    posts_dir = config['directories']['posts']
-    post_path = os.path.join(posts_dir, f'{post_id}.json')
+    post_path = get_post_path(post_id, config)
 
     # Load existing post
     if not os.path.exists(post_path):
