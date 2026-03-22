@@ -73,9 +73,10 @@ class TestConfigMixin:
 
     Available directory types for helper methods:
     - "inbox": For incoming ActivityPub activities
-    - "outbox": For actor.json, outbox.json, webfinger.json
+    - "data_root": For actor.json, webfinger.json
+    - "outbox": For outbox activity files
     - "posts": For Note/Article objects
-    - "activities": For Create/Accept/Follow activities
+    - "outbox": For outbox activity files (Create/Accept/Update)
     - "followers": For followers.json
     """
 
@@ -104,7 +105,8 @@ class TestConfigMixin:
                 "actor_name": "Test Actor",
                 "actor_summary": "A test actor",
                 "namespace": "activitypub",
-                "auto_accept_follow_requests": True
+                "auto_accept_follow_requests": True,
+                "max_page_size": 20
             },
             "security": {
                 "public_key_file": "test.pem",
@@ -113,9 +115,9 @@ class TestConfigMixin:
             "directories": {
                 "inbox": f"{base_test_dir}/inbox",
                 "inbox_queue": f"{base_test_dir}/inbox/queue",
-                "outbox": f"{base_test_dir}",
+                "data_root": f"{base_test_dir}",
+                "outbox": f"{base_test_dir}/outbox",
                 "posts": f"{base_test_dir}/posts",
-                "activities": f"{base_test_dir}/activities",
                 "followers": f"{base_test_dir}"
             }
         }
@@ -204,8 +206,8 @@ class TestConfigMixin:
             "name": actor_name
         }
 
-        # Use the outbox directory (which is the base static dir for actors)
-        actor_file = os.path.join(self.config['directories']['outbox'], 'actor.json')
+        # Use the data_root directory (base dir for actor, webfinger, etc.)
+        actor_file = os.path.join(self.config['directories']['data_root'], 'actor.json')
         with open(actor_file, 'w') as f:
             json.dump(test_actor, f, indent=2)
 
@@ -215,7 +217,7 @@ class TestConfigMixin:
         """Get the full path for a test file in a configured directory
 
         Args:
-            directory_type: Key from config['directories'] (e.g., 'posts', 'activities')
+            directory_type: Key from config['directories'] (e.g., 'posts', 'outbox')
             filename: Name of the file
 
         Returns:

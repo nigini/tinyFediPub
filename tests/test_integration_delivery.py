@@ -82,7 +82,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
             }
         }
 
-        actor_path = os.path.join(self.config['directories']['outbox'], 'actor.json')
+        actor_path = os.path.join(self.config['directories']['data_root'], 'actor.json')
         with open(actor_path, 'w') as f:
             json.dump(actor, f, indent=2)
 
@@ -179,7 +179,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
         self.assertIn(alice_actor_url, followers_data[items_key])
 
         # Step 5: Verify Accept activity was generated
-        activities_dir = self.config['directories']['activities']
+        activities_dir = self.config['directories']['outbox']
         accept_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
         self.assertGreater(len(accept_files), 0, "Accept activity should be generated")
 

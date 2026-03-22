@@ -49,17 +49,11 @@ CONTENT_TYPE_AP = 'application/activity+json'
 CONTENT_TYPE_LD = 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
 
 def load_json_file(filename):
-    """Load JSON data from static files"""
-    # Determine which directory based on filename
+    """Load JSON data from data_root or followers directory"""
     if filename == 'followers.json':
         base_dir = config['directories']['followers']
-    elif filename == 'actor.json':
-        base_dir = config['directories']['outbox']
-    elif filename == 'outbox.json':
-        base_dir = config['directories']['outbox']
     else:
-        # Default to outbox directory for other files
-        base_dir = config['directories']['outbox']
+        base_dir = config['directories']['data_root']
 
     filepath = os.path.join(base_dir, filename)
     with open(filepath, 'r') as f:
@@ -68,8 +62,8 @@ def load_json_file(filename):
 def write_actor_config():
     """Write actor configuration to actor.json"""
     actor_config = templates.render_actor(config, PUBLIC_KEY_PEM)
-    outbox_dir = config['directories']['outbox']
-    filepath = os.path.join(outbox_dir, 'actor.json')
+    data_root = config['directories']['data_root']
+    filepath = os.path.join(data_root, 'actor.json')
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, 'w') as f:
         json.dump(actor_config, f, indent=2)
@@ -107,8 +101,51 @@ def actor():
 @app.route(f'/{NAMESPACE}/outbox')
 @require_activitypub_accept
 def outbox():
-    """Outbox endpoint - collection of activities"""
-    response = jsonify(load_json_file('outbox.json'))
+    """Outbox endpoint - paginated collection of activities"""
+    max_page_size = config['activitypub'].get('max_page_size', 20)
+    outbox_dir = config['directories']['outbox']
+    os.makedirs(outbox_dir, exist_ok=True)
+
+    # Client can request smaller pages via ?limit=, capped at max_page_size
+    page_size = request.args.get('limit', max_page_size, type=int)
+    page_size = max(1, min(page_size, max_page_size))
+
+    # List activity files in reverse chronological order (filenames are {type}-{timestamp}.json)
+    activity_files = sorted(
+        [f for f in os.listdir(outbox_dir) if f.endswith('.json')],
+        reverse=True
+    )
+    total_items = len(activity_files)
+
+    # Determine page
+    page = request.args.get('page', 1, type=int)
+    page = max(1, page)
+    start = (page - 1) * page_size
+    page_files = activity_files[start:start + page_size]
+
+    # Load full activity objects for this page
+    items = []
+    for filename in page_files:
+        filepath = os.path.join(outbox_dir, filename)
+        try:
+            with open(filepath, 'r') as f:
+                items.append(json.load(f))
+        except (json.JSONDecodeError, FileNotFoundError):
+            continue
+
+    # Compute pagination links
+    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/outbox"
+    next_page = f"{base_url}?page={page + 1}" if start + page_size < total_items else None
+    prev_page = f"{base_url}?page={page - 1}" if page > 1 else None
+
+    outbox_data = templates.render_outbox_collection(
+        outbox_id=base_url,
+        total_items=total_items,
+        items=items,
+        next_page=next_page,
+        prev_page=prev_page
+    )
+    response = jsonify(outbox_data)
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
@@ -132,7 +169,11 @@ def post(post_id):
 def activity(activity_id):
     """Individual activity objects"""
     try:
-        response = jsonify(load_json_file(f'activities/{activity_id}.json'))
+        outbox_dir = config['directories']['outbox']
+        filepath = os.path.join(outbox_dir, f'{activity_id}.json')
+        with open(filepath, 'r') as f:
+            activity_data = json.load(f)
+        response = jsonify(activity_data)
         response.headers['Content-Type'] = CONTENT_TYPE_AP
         return response
     except FileNotFoundError:

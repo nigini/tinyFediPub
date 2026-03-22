@@ -44,9 +44,9 @@ class TestActivityProcessor(unittest.TestCase):
             "directories": {
                 "inbox": "static/tests/inbox",
                 "inbox_queue": "static/tests/inbox/queue",
-                "outbox": "static/tests",
+                "data_root": "static/tests",
+                "outbox": "static/tests/outbox",
                 "posts": "static/tests/posts",
-                "activities": "static/tests/activities",
                 "followers": "static/tests"
             }
         }
@@ -59,7 +59,7 @@ class TestActivityProcessor(unittest.TestCase):
         self.config = test_config
         os.makedirs(test_config['directories']['inbox'], exist_ok=True)
         os.makedirs(test_config['directories']['inbox_queue'], exist_ok=True)
-        os.makedirs(test_config['directories']['activities'], exist_ok=True)
+        os.makedirs(test_config['directories']['outbox'], exist_ok=True)
 
         # Reload activity processor module to pick up fresh config
         import importlib
@@ -92,7 +92,7 @@ class TestActivityProcessor(unittest.TestCase):
         self.assertTrue(result)
 
         # Verify Accept activity was created in static/activities/
-        activities_dir = self.config['directories']['activities']
+        activities_dir = self.config['directories']['outbox']
         activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
         self.assertEqual(len(activity_files), 1, "Should have created exactly one Accept activity")
 
@@ -154,7 +154,7 @@ class TestActivityProcessor(unittest.TestCase):
         self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
 
         # Verify two Accept activities were created (one for each follow)
-        activities_dir = self.config['directories']['activities']
+        activities_dir = self.config['directories']['outbox']
         activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
         self.assertEqual(len(activity_files), 2, "Should have created two Accept activities")
 
@@ -198,7 +198,7 @@ class TestActivityProcessor(unittest.TestCase):
             self.assertNotIn('https://mastodon.social/users/bob', followers_data.get('items', []))
 
         # Verify NO Accept activity was created when auto-accept is disabled
-        activities_dir = self.config['directories']['activities']
+        activities_dir = self.config['directories']['outbox']
         activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
         self.assertEqual(len(activity_files), 0, "Should not have created Accept activities when auto-accept is disabled")
 
@@ -490,9 +490,9 @@ class TestActivityQueueIntegration(unittest.TestCase):
             "directories": {
                 "inbox": "static/tests/inbox",
                 "inbox_queue": "static/tests/inbox/queue",
-                "outbox": "static/tests",
+                "data_root": "static/tests",
+                "outbox": "static/tests/outbox",
                 "posts": "static/tests/posts",
-                "activities": "static/tests/activities",
                 "followers": "static/tests"
             }
         }

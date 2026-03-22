@@ -9,7 +9,7 @@ import os
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from post_utils import create_post, create_activity, regenerate_outbox
+from post_utils import create_post, create_activity
 
 def main():
     parser = argparse.ArgumentParser(description='Create a new ActivityPub post')
@@ -35,9 +35,6 @@ def main():
         print(f"\n✅ Post created successfully!")
         print(f"Post ID: {post_id}")
         print(f"Activity ID: {activity_id}")
-
-        # Regenerate outbox
-        regenerate_outbox()
 
         # Deliver to followers
         print("\n📤 Delivering to followers...")

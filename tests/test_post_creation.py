@@ -6,14 +6,12 @@ import unittest
 import os
 import json
 import sys
-import tempfile
-import time
 from unittest.mock import patch
 sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
 from post_utils import (
     generate_post_id, create_post, create_activity,
-    regenerate_outbox, get_actor_info, generate_activity_id
+    get_actor_info, generate_activity_id
 )
 
 class TestPostCreation(unittest.TestCase, TestConfigMixin):
@@ -139,55 +137,16 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         
         # Check activity ID format (should start with 'create-' followed by timestamp)
         self.assertTrue(activity_id.startswith('create-'))
-        self.assertRegex(activity_id, r'^create-\d{8}-\d{6}$')
+        self.assertRegex(activity_id, r'^create-\d{8}-\d{6}-\d{6}$')
         
         # Check file was created
-        self.assert_file_exists('activities', f'{activity_id}.json')
+        self.assert_file_exists('outbox', f'{activity_id}.json')
 
         # Verify file contents
-        activity_path = self.get_test_file_path('activities', f'{activity_id}.json')
+        activity_path = self.get_test_file_path('outbox', f'{activity_id}.json')
         with open(activity_path, 'r') as f:
             saved_activity = json.load(f)
         self.assertEqual(saved_activity, activity_obj)
-    
-    def test_regenerate_outbox(self):
-        """Test outbox regeneration from activities"""
-        # Create a couple of posts and activities with sufficient time delay
-        posts_and_ids = []
-        for i in range(2):
-            post_obj, post_id = create_post('article', f"Post {i}", f"Content {i}", f"https://example.com/post{i}")
-            time.sleep(1)  # Ensure unique timestamp (1 second delay)
-            activity_obj, activity_id = create_activity(post_obj, post_id)
-            posts_and_ids.append((post_obj, post_id, activity_obj, activity_id))
-            time.sleep(1)  # Ensure unique timestamp for next iteration
-        
-        # Regenerate outbox
-        regenerate_outbox()
-        
-        # Check outbox file was created
-        self.assert_file_exists('outbox', 'outbox.json')
-
-        # Verify outbox contents
-        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
-        with open(outbox_path, 'r') as f:
-            outbox = json.load(f)
-        
-        self.assertEqual(outbox['@context'], "https://www.w3.org/ns/activitystreams")
-        self.assertEqual(outbox['type'], "OrderedCollection")
-        self.assertEqual(outbox['id'], "https://test.example.com/activitypub/outbox")
-        self.assertEqual(outbox['totalItems'], 2)
-        
-        # Check activities are in reverse chronological order (most recent first)
-        items = outbox['orderedItems']
-        self.assertEqual(len(items), 2)
-        
-        # Verify activity references (not full objects)
-        for i, item in enumerate(items):
-            post_obj, post_id, activity_obj, activity_id = posts_and_ids[1-i]  # Reversed order
-            self.assertEqual(item['type'], 'Create')
-            self.assertEqual(item['id'], f"https://test.example.com/activitypub/activities/{activity_id}")
-            self.assertEqual(item['actor'], "https://test.example.com/activitypub/actor")
-            self.assertEqual(item['object'], f"https://test.example.com/activitypub/posts/{post_id}")
     
     def test_get_actor_info(self):
         """Test actor info retrieval"""
@@ -200,73 +159,13 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
     
     def test_get_actor_info_missing_file(self):
         """Test actor info when file doesn't exist"""
-        actor_path = self.get_test_file_path('outbox', 'actor.json')
+        actor_path = self.get_test_file_path('data_root', 'actor.json')
         os.remove(actor_path)
 
         with patch('builtins.print'):  # Suppress warning print
             actor = get_actor_info()
 
         self.assertIsNone(actor)
-
-    def test_regenerate_outbox_with_malformed_activities(self):
-        """Test outbox generation skips malformed activity files gracefully"""
-        # Create a valid activity first
-        post_obj, post_id = create_post('article', "Good Post", "Valid content", "https://example.com/good")
-        activity_obj, activity_id = create_activity(post_obj, post_id)
-
-        # Verify we have exactly one valid activity file at this point
-        self.assert_file_count('activities', 1, '*.json')
-
-        # Create malformed JSON file
-        malformed_json_path = self.get_test_file_path('activities', 'malformed.json')
-        with open(malformed_json_path, 'w') as f:
-            f.write('{ "invalid": json syntax here')
-
-        # Create structurally invalid but well-formed JSON
-        invalid_structure_path = self.get_test_file_path('activities', 'invalid-structure.json')
-        invalid_activity = {
-            "someField": "value",
-            "missing": "required fields like type, id, actor",
-            "notAnActivity": True
-        }
-        with open(invalid_structure_path, 'w') as f:
-            json.dump(invalid_activity, f)
-
-        # Should complete successfully, skipping bad files
-        import io
-        import sys
-        from contextlib import redirect_stdout
-
-        # Capture stdout to verify warnings are printed
-        captured_output = io.StringIO()
-        with redirect_stdout(captured_output):
-            regenerate_outbox()
-
-        # Verify warnings were printed
-        output = captured_output.getvalue()
-        self.assertIn('Warning: Skipping malformed activity file', output)
-        self.assertIn('malformed.json', output)
-        self.assertIn('invalid-structure.json', output)
-
-        # Verify outbox was created successfully
-        self.assert_file_exists('outbox', 'outbox.json')
-
-        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
-        with open(outbox_path, 'r') as f:
-            outbox = json.load(f)
-
-        # Verify the correction worked: totalItems should match orderedItems length
-        self.assertEqual(outbox['totalItems'], len(outbox['orderedItems']),
-                        "totalItems should be corrected to match actual valid activities")
-
-        # Should have exactly 1 valid activity (the one we created)
-        self.assertEqual(len(outbox['orderedItems']), 1,
-                        "Should contain exactly 1 valid activity after skipping malformed files")
-
-        # All activities should be valid Create activities
-        for item in outbox['orderedItems']:
-            self.assertEqual(item['type'], 'Create')
-
 
 class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
     """Integration tests for the CLI workflow"""
@@ -287,50 +186,32 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
     
     def test_cli_workflow(self):
         """Test the complete CLI workflow"""
-        # Import and run the CLI functions
-        from post_utils import create_post, create_activity, regenerate_outbox
-        
-        # Simulate CLI command
+        from post_utils import create_post, create_activity
+
         title = "CLI Test Post"
         content = "Testing CLI workflow"
         url = "https://myblog.com/cli-test"
-        
-        # Run the workflow
+
         post_obj, post_id = create_post('article', title, content, url)
         activity_obj, activity_id = create_activity(post_obj, post_id)
-        regenerate_outbox()
-        
+
         # Verify all files were created
         self.assert_file_exists('posts', f'{post_id}/post.json')
-        self.assert_file_exists('activities', f'{activity_id}.json')
-        self.assert_file_exists('outbox', 'outbox.json')
-
-        # Verify outbox contains the new post
-        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
-        with open(outbox_path, 'r') as f:
-            outbox = json.load(f)
-
-        self.assertEqual(outbox['totalItems'], 1)
-        self.assertEqual(outbox['orderedItems'][0]['object'], f"https://cli-test.example.com/activitypub/posts/{post_id}")
+        self.assert_file_exists('outbox', f'{activity_id}.json')
 
     def test_cli_note_workflow(self):
         """Test the complete CLI workflow for Note posts"""
-        # Import and run the CLI functions
-        from post_utils import create_post, create_activity, regenerate_outbox
+        from post_utils import create_post, create_activity
 
-        # Simulate CLI command for Note (no title required)
         content = "Just published a new blog post about ActivityPub federation!"
         url = "https://myblog.com/activitypub-post"
 
-        # Run the workflow with Note type
         post_obj, post_id = create_post('note', None, content, url)
         activity_obj, activity_id = create_activity(post_obj, post_id)
-        regenerate_outbox()
 
         # Verify all files were created
         self.assert_file_exists('posts', f'{post_id}/post.json')
-        self.assert_file_exists('activities', f'{activity_id}.json')
-        self.assert_file_exists('outbox', 'outbox.json')
+        self.assert_file_exists('outbox', f'{activity_id}.json')
 
         # Verify post is a Note type
         post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
@@ -339,14 +220,6 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
         self.assertEqual(post['type'], 'Note')
         self.assertEqual(post['content'], content)
         self.assertNotIn('name', post)  # No title for Note
-
-        # Verify outbox contains the new post
-        outbox_path = self.get_test_file_path('outbox', 'outbox.json')
-        with open(outbox_path, 'r') as f:
-            outbox = json.load(f)
-
-        self.assertEqual(outbox['totalItems'], 1)
-        self.assertEqual(outbox['orderedItems'][0]['object'], f"https://cli-test.example.com/activitypub/posts/{post_id}")
 
 
 class TestUtilityFunctions(unittest.TestCase):
@@ -366,9 +239,9 @@ class TestUtilityFunctions(unittest.TestCase):
         self.assertTrue(accept_id.startswith('accept-'))
         self.assertTrue(follow_id.startswith('follow-'))
 
-        # Should include timestamp format YYYYMMDD-HHMMSS
+        # Should include timestamp format YYYYMMDD-HHMMSS-ffffff (microseconds)
         import re
-        timestamp_pattern = r'-\d{8}-\d{6}$'
+        timestamp_pattern = r'-\d{8}-\d{6}-\d{6}$'
         self.assertRegex(create_id, timestamp_pattern)
         self.assertRegex(accept_id, timestamp_pattern)
         self.assertRegex(follow_id, timestamp_pattern)

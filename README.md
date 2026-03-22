@@ -74,7 +74,7 @@ Add posts using the CLI:
 Edit existing posts:
 
 ```bash
-./client/edit_post.py --post-id "20250101-120000-my-post"
+./client/edit_post.py --post-id "550e8400-e29b-41d4-a716-446655440000"
 ```
 **Note:** Updated posts are automatically delivered to followers when edited.
 
@@ -126,15 +126,19 @@ ActivityPub entities are generated using Jinja2 templates for maintainability an
 
 ```
 templates/
+├── base/             # Shared base templates
+│   ├── activity.json.j2   # Base for all activity types
+│   └── post.json.j2       # Base for Article/Note
 ├── objects/          # ActivityStreams Object types
 │   ├── actor.json.j2      # Person/Service actors
 │   ├── article.json.j2    # Blog posts, articles
-│   └── note.json.j2       # Short messages (future)
+│   └── note.json.j2       # Short messages
 ├── activities/       # ActivityStreams Activity types
 │   ├── create.json.j2     # Create activities
-│   └── update.json.j2     # Update activities (future)
+│   ├── update.json.j2     # Update activities
+│   └── accept.json.j2     # Accept activities (follow responses)
 └── collections/      # ActivityStreams Collections
-    ├── outbox.json.j2     # Outbox collections
+    ├── outbox.json.j2     # Outbox collection (paginated)
     └── followers.json.j2  # Followers collections
 ```
 
@@ -150,7 +154,7 @@ templates/
 **Implemented:**
 - **WebFinger Discovery** - `.well-known/webfinger` for actor discovery
 - **Actor Profile** - Dynamic actor generation from config
-- **Outbox Collection** - Serves all published activities
+- **Outbox Collection** - Dynamically serves published activities with pagination
 - **Individual Endpoints** - Posts and activities accessible via direct URLs
 - **Inbox Endpoint** - Receives activities from other federated servers with HTTP signature verification
 - **Followers Collection** - Manages and serves follower list
@@ -160,18 +164,18 @@ templates/
 
 **File Structure:**
 ```
-static/
+data/
 ├── actor.json           # Your actor profile (auto-generated)
-├── outbox.json          # Collection of your activities (auto-generated)
 ├── followers.json       # Collection of followers (auto-generated)
-├── posts/               # Individual post objects
-│   └── 20250921-143022-my-post.json
-├── activities/          # Individual activity objects
-│   └── create-20250921-143022.json
+├── posts/               # Individual post objects (UUID directories)
+│   └── {uuid}/
+│       └── post.json
+├── outbox/              # Outgoing activity objects
+│   └── create-20250921-143022-123456.json
 └── inbox/               # Received activities from other servers
-    ├── TO_DO.json       # Queue of activities needing processing
     ├── follow-*.json    # Follow requests received
-    └── undo-*.json      # Unfollow activities received
+    ├── undo-*.json      # Unfollow activities received
+    └── queue/           # Symlinks to activities awaiting processing
 ```
 
 **Current Capabilities:**
@@ -187,17 +191,19 @@ static/
 **Configuration Options:**
 - `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
 - `require_http_signatures` - Require HTTP signatures on all incoming activities (default: false). Set to `true` for production to reject unsigned server-to-server traffic
+- `max_page_size` - Maximum items per page for paginated collections like outbox (default: 20). Clients can request smaller pages via `?limit=N`
 
 ## What's Next
 
 **Recommended Improvements:**
 - **Proper logging system** - Replace print() statements with Python's logging module
-- **Activity ID naming improvements** - Fix timestamp conflicts by implementing Content-Addressable Storage (CAS) approach using content hashes instead of timestamps
-- **Outbox folder organization** - Create dedicated outbox directory structure mirroring inbox organization for better file management
 
 **Completed:**
 - ✅ **Deprecation fixes** - datetime.utcnow() replaced with datetime.now(UTC) for Python 3.11+ compatibility
 - ✅ **Update Activity Support** - Post editing with federated notifications (outgoing only). Use `./client/edit_post.py --post-id <id>` to edit posts interactively.
+- ✅ **UUID-based post IDs** - Posts use UUID4 identifiers with dedicated directories, ready for per-post collections (likes, shares, replies)
+- ✅ **Outbox folder organization** - Dedicated outbox directory mirroring inbox pattern, dynamic paginated collection endpoint
+- ✅ **Activity ID microsecond timestamps** - Activity IDs include microseconds to prevent timestamp collisions
 
 **Future Enhancements:**
 
@@ -210,7 +216,7 @@ static/
     ],
     "type": "EmojiReact",
     "actor": "https://mastodon.social/users/alice",
-    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000",
     "content": "🔥"
   }
   ```
@@ -223,7 +229,7 @@ static/
     "type": "Like",
     "id": "https://mastodon.social/users/alice/statuses/123456/activity",
     "actor": "https://mastodon.social/users/alice",
-    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post"
+    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000"
   }
   ```
   Key properties: `actor` identifies who liked; `object` references the post being liked. Implementation: Process incoming Like activities, maintain per-post likes collection at `/posts/{id}/likes` endpoint, add `likes` property to post objects pointing to collection, handle `Undo(Like)` for unlikes. See [ActivityPub §5.7](https://www.w3.org/TR/activitypub/#likes).
@@ -235,7 +241,7 @@ static/
     "type": "Announce",
     "id": "https://mastodon.social/users/bob/statuses/789012/activity",
     "actor": "https://mastodon.social/users/bob",
-    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000",
     "published": "2025-01-19T15:30:00Z"
   }
   ```
@@ -248,7 +254,7 @@ static/
     "type": "Delete",
     "id": "https://yourblog.com/activities/delete-abc123",
     "actor": "https://yourblog.com/activitypub/actor",
-    "object": "https://yourblog.com/activitypub/posts/20250921-143022-my-post",
+    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000",
     "published": "2025-01-19T16:00:00Z"
   }
   ```

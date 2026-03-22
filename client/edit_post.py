@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from post_utils import (
     load_config, update_post, create_update_activity,
-    regenerate_outbox, get_post_path
+    get_post_path
 )
 
 
@@ -100,9 +100,6 @@ def main():
         # Create Update activity
         activity_obj, activity_id = create_update_activity(updated_post, post_id)
         print(f"Activity ID: {activity_id}")
-
-        # Regenerate outbox
-        regenerate_outbox()
 
         # Deliver to followers
         print("\n📤 Delivering to followers...")

@@ -3,8 +3,14 @@
   "type": "OrderedCollection",
   "id": "{{ outbox_id }}",
   "totalItems": {{ total_items }},
+  {% if next_page %}
+  "next": "{{ next_page }}",
+  {% endif %}
+  {% if prev_page %}
+  "prev": "{{ prev_page }}",
+  {% endif %}
   "orderedItems": [
-    {% for item in activity_generator %}
+    {% for item in items %}
     {{ item | tojson }}{% if not loop.last %},{% endif %}
     {% endfor %}
   ]

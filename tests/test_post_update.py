@@ -117,7 +117,7 @@ class TestPostUpdate(unittest.TestCase, TestConfigMixin):
         self.assertEqual(activity_obj['published'], updated_post['updated'])
 
         # Check activity file saved
-        self.assert_file_exists('activities', f'{activity_id}.json')
+        self.assert_file_exists('outbox', f'{activity_id}.json')
 
     def test_update_nonexistent_post(self):
         """Test updating a non-existent post raises error"""

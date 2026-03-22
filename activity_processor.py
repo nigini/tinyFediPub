@@ -78,7 +78,7 @@ class FollowActivityProcessor(BaseActivityProcessor):
         )
 
         # Save Accept activity to activities directory
-        activities_dir = config['directories']['activities']
+        activities_dir = config['directories']['outbox']
         os.makedirs(activities_dir, exist_ok=True)
         activity_path = os.path.join(activities_dir, f"{activity_id}.json")
 

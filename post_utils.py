@@ -97,9 +97,9 @@ def generate_activity_id(activity_type):
         activity_type: Activity type (e.g., 'create', 'accept', 'follow')
 
     Returns:
-        str: Activity ID like 'create-20250921-143022' or 'accept-20250921-143022'
+        str: Activity ID like 'create-20250921-143022-123456'
     """
-    timestamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')
+    timestamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S-%f')
     return f"{activity_type.lower()}-{timestamp}"
 
 def parse_actor_url(actor_url):
@@ -262,8 +262,8 @@ def get_actor_info():
     """
     try:
         config = load_config()
-        outbox_dir = config['directories']['outbox']
-        actor_file = os.path.join(outbox_dir, 'actor.json')
+        data_root = config['directories']['data_root']
+        actor_file = os.path.join(data_root, 'actor.json')
         with open(actor_file, 'r') as f:
             return json.load(f)
     except FileNotFoundError:
@@ -285,7 +285,7 @@ def save_activity_file(activity, activity_id, config):
     """
     import os
 
-    activities_dir = config['directories']['activities']
+    activities_dir = config['directories']['outbox']
     os.makedirs(activities_dir, exist_ok=True)
     activity_path = os.path.join(activities_dir, f'{activity_id}.json')
 
@@ -373,31 +373,3 @@ def create_update_activity(post_object, post_id):
 
     return activity, activity_id
 
-def regenerate_outbox():
-    """
-    Regenerate outbox.json by streaming activities directory using template generator
-    Memory efficient - only loads one activity at a time
-    """
-    import os
-
-    actor = get_actor_info()
-    if not actor:
-        raise Exception("Cannot generate outbox: actor.json not found")
-
-    base_url = actor['id'].rsplit('/actor', 1)[0]
-    config = load_config()
-    activities_dir = config['directories']['activities']
-    outbox_dir = config['directories']['outbox']
-    outbox_path = os.path.join(outbox_dir, 'outbox.json')
-
-    # Ensure directories exist
-    os.makedirs(outbox_dir, exist_ok=True)
-
-    # Use streaming template rendering
-    activity_count = templates.render_outbox_streaming(
-        outbox_id=f"{base_url}/outbox",
-        activities_dir=activities_dir,
-        output_path=outbox_path
-    )
-
-    print(f"✓ Regenerated outbox with {activity_count} activities (streaming)")

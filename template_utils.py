@@ -208,97 +208,27 @@ class ActivityPubTemplates:
 
         return self.render_json_template('collections/followers.json.j2', **template_data)
 
-    def render_outbox_streaming(self, outbox_id, activities_dir, output_path):
+    def render_outbox_collection(self, outbox_id, total_items, items, next_page=None, prev_page=None):
         """
-        Render outbox collection template with streaming for memory efficiency
+        Render outbox as OrderedCollection with items inline and optional pagination links
 
         Args:
             outbox_id: Outbox collection ID
-            activities_dir: Directory containing activity files
-            output_path: Path to write outbox file
+            total_items: Total number of activities
+            items: List of activity summary dicts for this page
+            next_page: URL for next page, or None
+            prev_page: URL for previous page, or None
 
         Returns:
-            int: Number of activities processed
+            dict: OrderedCollection JSON object
         """
-        import os
-
-        valid_count = 0
-
-        def activity_generator():
-            """Generator that yields activity references one at a time"""
-            nonlocal valid_count
-            activity_files = [f for f in sorted(os.listdir(activities_dir), reverse=True) if f.endswith('.json')]
-
-            for filename in activity_files:
-                filepath = os.path.join(activities_dir, filename)
-                try:
-                    with open(filepath, 'r') as f:
-                        activity = json.load(f)
-
-                    # Create activity reference (only current activity in memory)
-                    yield {
-                        "type": activity["type"],
-                        "id": activity["id"],
-                        "actor": activity["actor"],
-                        "published": activity["published"],
-                        "object": activity["object"]["id"] if isinstance(activity["object"], dict) else activity["object"]
-                    }
-                    valid_count += 1
-
-                except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
-                    print(f"Warning: Skipping malformed activity file: {filepath} - {e}")
-                    continue
-
-        # Count activities for totalItems (quick directory scan)
-        activity_count = 0
-        if os.path.exists(activities_dir):
-            activity_count = len([f for f in os.listdir(activities_dir) if f.endswith('.json')])
-
-        # Get template and create stream
-        template = self.env.get_template('collections/outbox.json.j2')
-        stream = template.stream(
+        return self.render_json_template('collections/outbox.json.j2',
             outbox_id=outbox_id,
-            total_items=activity_count,
-            activity_generator=activity_generator()
+            total_items=total_items,
+            items=items,
+            next_page=next_page,
+            prev_page=prev_page
         )
-
-        # Write stream to file
-        with open(output_path, 'w') as f:
-            for chunk in stream:
-                f.write(chunk)
-
-        # If valid count differs from total count, fix the totalItems field
-        if valid_count != activity_count:
-            self._fix_outbox_total_count(output_path, activity_count, valid_count)
-
-        return valid_count
-
-    def _fix_outbox_total_count(self, output_path, expected_count, actual_count):
-        """
-        Private method to fix totalItems count in outbox file when malformed activities are skipped
-
-        Args:
-            output_path: Path to the outbox file
-            expected_count: Original count of JSON files
-            actual_count: Actual count of valid activities processed
-        """
-        print(f"Correcting totalItems from {expected_count} to {actual_count}")
-
-        # Read the generated file and fix totalItems
-        with open(output_path, 'r') as f:
-            content = f.read()
-
-        # Replace the totalItems value using regex
-        import re
-        content = re.sub(
-            r'"totalItems":\s*\d+',
-            f'"totalItems": {actual_count}',
-            content
-        )
-
-        # Write corrected file
-        with open(output_path, 'w') as f:
-            f.write(content)
 
 
 # Global instance

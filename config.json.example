@@ -12,7 +12,8 @@
     "actor_name": "localhost's blog",
     "actor_summary": "A personal blog with federated posts",
     "namespace": "activitypub",
-    "auto_accept_follow_requests": true
+    "auto_accept_follow_requests": true,
+    "max_page_size": 20
   },
   "security": {
     "public_key_file": "keys/public_key.pem",
@@ -20,11 +21,11 @@
     "require_http_signatures": false
   },
   "directories": {
-    "inbox": "static/inbox",
-    "inbox_queue": "static/inbox/queue",
-    "outbox": "static",
-    "posts": "static/posts",
-    "activities": "static/activities",
-    "followers": "static"
+    "inbox": "data/inbox",
+    "inbox_queue": "data/inbox/queue",
+    "data_root": "data",
+    "outbox": "data/outbox",
+    "posts": "data/posts",
+    "followers": "data"
   }
 }
