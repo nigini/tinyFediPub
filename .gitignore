@@ -1,4 +1,5 @@
 .venv
+VENV
 .idea
 .*.un~
 __pycache__

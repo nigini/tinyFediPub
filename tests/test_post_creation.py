@@ -28,19 +28,20 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         """Clean up test environment"""
         self.teardown_test_environment()
     
-    def test_generate_post_id_with_title(self):
-        """Test post ID generation with title"""
-        post_id = generate_post_id("My Awesome Post!")
-        
-        # Should start with timestamp format YYYYMMDD-HHMMSS
-        self.assertRegex(post_id, r'^\d{8}-\d{6}-my-awesome-post$')
-    
-    def test_generate_post_id_without_title(self):
-        """Test post ID generation without title"""
+    def test_generate_post_id(self):
+        """Test post ID generation returns UUID"""
         post_id = generate_post_id()
-        
-        # Should be just timestamp format
-        self.assertRegex(post_id, r'^\d{8}-\d{6}$')
+
+        # Should be a valid UUID4 format
+        import uuid
+        parsed = uuid.UUID(post_id)
+        self.assertEqual(parsed.version, 4)
+    
+    def test_generate_post_id_uniqueness(self):
+        """Test that each call generates a unique ID"""
+        id1 = generate_post_id()
+        id2 = generate_post_id()
+        self.assertNotEqual(id1, id2)
     
     def test_create_post(self):
         """Test post creation and file saving"""

@@ -5,6 +5,7 @@ Utilities for creating ActivityPub posts
 import json
 import os
 import re
+import uuid
 from datetime import datetime, UTC
 from template_utils import templates
 
@@ -30,24 +31,14 @@ def slugify(text):
     slug = re.sub(r'[-\s]+', '-', slug)
     return slug.strip('-')[:30]  # Limit length
 
-def generate_post_id(title=None):
+def generate_post_id():
     """
-    Generate post ID with timestamp + optional title suffix
-
-    Args:
-        title: Optional title to create suffix from
+    Generate a unique post ID using UUID4
 
     Returns:
-        str: Post ID like '20250913-143022' or '20250913-143022-my-post'
+        str: UUID4 string like '550e8400-e29b-41d4-a716-446655440000'
     """
-    timestamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')
-
-    if title:
-        suffix = slugify(title)
-        if suffix:
-            return f"{timestamp}-{suffix}"
-
-    return timestamp
+    return str(uuid.uuid4())
 
 def generate_base_url(config):
     """
@@ -164,7 +155,7 @@ def create_post(post_type, title, content, url, summary=None, post_id=None):
     
     # Generate post ID if not provided
     if post_id is None:
-        post_id = generate_post_id(title)
+        post_id = generate_post_id()
 
     # Generate published timestamp
     published = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
