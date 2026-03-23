@@ -81,7 +81,7 @@ Edit existing posts:
 Process incoming activities: 
 
 ```bash
-python activity_processor.py` #or set up as a cron job
+python -m activity_processor` #or set up as a cron job
 ```
 **Note:** Activities received in the inbox are automatically queued to be 
 processed! 
