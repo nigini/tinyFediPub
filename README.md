@@ -195,125 +195,33 @@ data/
 
 ## What's Next
 
-**Recommended Improvements:**
-- **Proper logging system** - Replace print() statements with Python's logging module
+**Architecture:**
+- **Outbox queue processing** — Move outbox delivery into the queue system so CLI tools just create + queue activities, and the processor handles delivery (with retry on failure)
+- **Integrate delivery into processors** — Move `activity_delivery.py` into the `activity_processor` module as `delivery.py`, since delivery is outbox processing
+- **Per-follower delivery tracking** — Expand the queue to track delivery per-follower, enabling independent retries for failed deliveries
 
-**Completed:**
-- ✅ **Deprecation fixes** - datetime.utcnow() replaced with datetime.now(UTC) for Python 3.11+ compatibility
-- ✅ **Update Activity Support** - Post editing with federated notifications (outgoing only). Use `./client/edit_post.py --post-id <id>` to edit posts interactively.
-- ✅ **UUID-based post IDs** - Posts use UUID4 identifiers with dedicated directories, ready for per-post collections (likes, shares, replies)
-- ✅ **Outbox folder organization** - Dedicated outbox directory mirroring inbox pattern, dynamic paginated collection endpoint
-- ✅ **Activity ID microsecond timestamps** - Activity IDs include microseconds to prevent timestamp collisions
+**Activity Types:**
+- **Like** — Per-post likes collection at `/posts/{id}/likes`, with `Undo(Like)` support. See [AP §5.7](https://www.w3.org/TR/activitypub/#likes)
+- **Announce** — Per-post shares collection at `/posts/{id}/shares`, with `Undo(Announce)`. See [AP §5.8](https://www.w3.org/TR/activitypub/#shares)
+- **Delete** — Tombstoning posts + federated Delete delivery. See [AP §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
+- **EmojiReact** — Rich reactions per [FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md)
 
-**Future Enhancements:**
-
-- **Emoji Reactions (EmojiReact)** - Rich reaction support beyond binary like/dislike ([FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md))
-  ```json
-  {
-    "@context": [
-      "https://www.w3.org/ns/activitystreams",
-      {"litepub": "http://litepub.social/ns#", "EmojiReact": "litepub:EmojiReact"}
-    ],
-    "type": "EmojiReact",
-    "actor": "https://mastodon.social/users/alice",
-    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000",
-    "content": "🔥"
-  }
-  ```
-  Implementation: Process incoming EmojiReact activities, maintain per-post reactions grouped by emoji at `/posts/{id}/reactions` endpoint. Handle both unicode emoji and custom emoji (with `tag` array containing Emoji objects). Support `Undo(EmojiReact)` for removing reactions. Backward compatible with `Like` activities containing `content`. Estimated effort: ~500-700 lines (processors, endpoints, collections, tests).
-
-- **Like Activity Support** - Track post engagement with likes collection
-  ```json
-  {
-    "@context": "https://www.w3.org/ns/activitystreams",
-    "type": "Like",
-    "id": "https://mastodon.social/users/alice/statuses/123456/activity",
-    "actor": "https://mastodon.social/users/alice",
-    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000"
-  }
-  ```
-  Key properties: `actor` identifies who liked; `object` references the post being liked. Implementation: Process incoming Like activities, maintain per-post likes collection at `/posts/{id}/likes` endpoint, add `likes` property to post objects pointing to collection, handle `Undo(Like)` for unlikes. See [ActivityPub §5.7](https://www.w3.org/TR/activitypub/#likes).
-
-- **Announce Activity Support** - Track post shares/boosts collection
-  ```json
-  {
-    "@context": "https://www.w3.org/ns/activitystreams",
-    "type": "Announce",
-    "id": "https://mastodon.social/users/bob/statuses/789012/activity",
-    "actor": "https://mastodon.social/users/bob",
-    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000",
-    "published": "2025-01-19T15:30:00Z"
-  }
-  ```
-  Key properties: `actor` identifies who shared; `object` references the post being announced. Implementation: Process incoming Announce activities, maintain per-post shares collection at `/posts/{id}/shares` endpoint, add `shares` property to post objects pointing to collection, handle `Undo(Announce)` for unshares. See [ActivityPub §5.8](https://www.w3.org/TR/activitypub/#shares).
-
-- **Delete Activity Support** - Remove posts from federation with tombstoning
-  ```json
-  {
-    "@context": "https://www.w3.org/ns/activitystreams",
-    "type": "Delete",
-    "id": "https://yourblog.com/activities/delete-abc123",
-    "actor": "https://yourblog.com/activitypub/actor",
-    "object": "https://yourblog.com/activitypub/posts/550e8400-e29b-41d4-a716-446655440000",
-    "published": "2025-01-19T16:00:00Z"
-  }
-  ```
-  Key properties: `actor` is the deleter; `object` references the post being deleted. Implementation: `delete_post.py` CLI replaces post file with Tombstone object (preserves references in conversations), creates Delete activity, delivers to all followers. Tombstone includes `deleted` timestamp and returns 200 OK instead of 410 Gone to maintain conversation integrity. See [ActivityPub §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox).
-
+**Other:**
+- Proper logging system (replace `print()` with Python's `logging` module)
 - Manual follow approval workflow
 - Mention and reply handling
-- Clients endpoints
+- Client-to-Server endpoints (see `docs/C2S.md` for design)
 
-## To Consider
+**Completed:**
+- ✅ Deprecation fixes (Python 3.11+ datetime)
+- ✅ Update Activity support with federated notifications
+- ✅ UUID-based post IDs with dedicated directories
+- ✅ Outbox folder organization with dynamic paginated endpoint
+- ✅ Activity ID microsecond timestamps
+- ✅ Activity processor module with auto-discovery and config-as-parameter
 
-### Client-to-Server (C2S) Protocol and Mastodon API Compatibility
+## Design Notes
 
-**Current Implementation:** tinyFedi implements only the Server-to-Server (S2S) protocol for federation. Content creation and editing happens via CLI tools (`client/new_post.py`, `client/edit_post.py`), which is ideal for blog use cases.
-
-**The C2S vs Mastodon API Debate:** The ActivityPub specification includes a Client-to-Server (C2S) protocol, but it has seen almost no real-world adoption. Mastodon rejected C2S support in 2019, arguing the spec was too barebones (lacking notifications, search, autocomplete, blocking, muting) and would require so much custom vocabulary that "you might as well just use the Mastodon REST API." Instead, Mastodon's proprietary API became the de facto standard, with other platforms (Pleroma, Misskey) implementing Mastodon API compatibility rather than C2S.
-
-| Aspect | ActivityPub C2S | Mastodon API |
-|--------|----------------|--------------|
-| **Philosophy** | Protocol-first, thin server | Feature-rich, thick server |
-| **Scope** | Minimal (POST activities, GET collections) | Comprehensive (notifications, search, filters, muting, blocking) |
-| **Interoperability** | Works across any C2S implementation | Mastodon-specific (but copied by others) |
-| **Adoption** | Almost none | Universal in Fediverse |
-
-**Third-Party Client Support:** Popular Fediverse clients (Tusky, Ivory, Mast, Elk) expect Mastodon API compatibility, which requires: (1) OAuth 2.0 authentication flow with `/oauth/authorize` and `/oauth/token` endpoints, (2) Mastodon-compatible API endpoints like `/api/v1/statuses`, and (3) specific OAuth scopes (`read`, `write`, `follow`). The ActivityPub Client-to-Server protocol alone is insufficient - clients expect the full Mastodon API surface.
-
-**Alternative Approaches:** Simple authentication methods (Bearer tokens, HTTP Basic Auth) would enable custom web interfaces or curl-based posting but won't work with existing mobile apps. Implementing full Mastodon API compatibility is a significant undertaking that essentially requires reimplementing Mastodon's client-facing layer.
-
-### Linked Data Signatures vs HTTP Signatures
-
-**Current Implementation:** HTTP Signatures (transport-layer, header-based)
-
-The fediverse currently uses **HTTP Signatures** (draft-cavage-http-signatures-12) which sign the HTTP request itself. The signature lives in the `Signature` header, and the activity JSON body remains clean without embedded signatures.
-
-**Alternative Approach:** Linked Data Signatures (object-layer, embedded)
-
-**Linked Data Signatures** embed cryptographic signatures directly in the ActivityPub JSON document:
-
-```json
-{
-  "type": "Follow",
-  "actor": "https://example.com/users/alice",
-  "object": "https://yourserver.com/actor",
-  "signature": {
-    "type": "RsaSignature2017",
-    "creator": "https://example.com/users/alice#main-key",
-    "created": "2025-01-05T12:00:00Z",
-    "signatureValue": "base64encodedstuff=="
-  }
-}
-```
-
-**Potential Advantages:**
-- **Persistence:** Signature travels with the activity when stored/forwarded
-- **Verification without transport:** Can verify authenticity of stored activities later
-- **Migration scenarios:** Verify integrity and authorship of archived activities
-- **Multi-hop federation:** Original signature preserved through forwarding
-
-**Why Not Implemented:**
-- More complex (requires JSON-LD canonicalization)
-- Mostly deprecated in modern fediverse (Mastodon, Pleroma use HTTP signatures)
-- HTTP signatures are simpler and cover the same security requirements for real-time federation
+See `docs/` for detailed design documents:
+- `docs/C2S.md` — Client-to-Server API design
+- `docs/AP_Federation/SignaturesFlows.md` — HTTP signature flows
