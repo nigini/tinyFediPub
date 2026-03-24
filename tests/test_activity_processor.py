@@ -262,7 +262,6 @@ class TestActivityProcessor(unittest.TestCase):
         """Test handling of unknown activity types"""
         from activity_processor import PROCESSORS
 
-        self.assertNotIn('Like', PROCESSORS)
         self.assertNotIn('Announce', PROCESSORS)
 
     def test_activity_processor_registry(self):

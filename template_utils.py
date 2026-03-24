@@ -208,6 +208,28 @@ class ActivityPubTemplates:
 
         return self.render_json_template('collections/followers.json.j2', **template_data)
 
+    def render_likes_collection(self, likes_id, actors_list=None):
+        """
+        Render likes collection template
+
+        Args:
+            likes_id: Collection ID
+            actors_list: List of actor URLs who liked the post (empty list if None)
+
+        Returns:
+            dict: Likes collection JSON object
+        """
+        if actors_list is None:
+            actors_list = []
+
+        template_data = {
+            'likes_id': likes_id,
+            'total_items': len(actors_list),
+            'actors': actors_list
+        }
+
+        return self.render_json_template('collections/likes.json.j2', **template_data)
+
     def render_outbox_collection(self, outbox_id, total_items, items, next_page=None, prev_page=None):
         """
         Render outbox as OrderedCollection with items inline and optional pagination links

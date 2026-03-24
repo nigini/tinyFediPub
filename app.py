@@ -164,6 +164,28 @@ def post(post_id):
     except FileNotFoundError:
         return jsonify({'error': 'Post not found'}), 404
 
+@app.route(f'/{NAMESPACE}/posts/<post_id>/likes')
+@require_activitypub_accept
+def post_likes(post_id):
+    """Likes collection for a post"""
+    from post_utils import get_post_path, load_config as load_post_config
+
+    post_path = get_post_path(post_id, load_post_config())
+
+    if not os.path.exists(post_path):
+        return jsonify({'error': 'Post not found'}), 404
+
+    likes_path = os.path.join(os.path.dirname(post_path), 'likes.json')
+    if not os.path.exists(likes_path):
+        return jsonify({'error': 'No likes collection'}), 404
+
+    with open(likes_path, 'r') as f:
+        likes_data = json.load(f)
+
+    response = jsonify(likes_data)
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
 @app.route(f'/{NAMESPACE}/activities/<activity_id>')
 @require_activitypub_accept
 def activity(activity_id):

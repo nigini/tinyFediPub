@@ -161,6 +161,7 @@ templates/
 - **Content Negotiation** - Proper ActivityPub headers and validation
 - **HTTP Signature Verification** - Cryptographic validation of incoming activities (configurable)
 - **HTTP Signature Signing** - Sign outgoing activities for secure delivery
+- **Likes Collection** - Per-post likes tracking with collection endpoint at `/posts/{id}/likes`
 
 **File Structure:**
 ```
@@ -169,7 +170,8 @@ data/
 ├── followers.json       # Collection of followers (auto-generated)
 ├── posts/               # Individual post objects (UUID directories)
 │   └── {uuid}/
-│       └── post.json
+│       ├── post.json
+│       └── likes.json   # Per-post likes collection (auto-generated)
 ├── outbox/              # Outgoing activity objects
 │   └── create-20250921-143022-123456.json
 └── inbox/               # Received activities from other servers
@@ -187,6 +189,7 @@ data/
 - ✅ Deliver new posts to all followers automatically
 - ✅ HTTP signature verification for incoming activities (configurable)
 - ✅ HTTP signature signing for all outgoing deliveries
+- ✅ Receive and track Like activities per post
 
 **Configuration Options:**
 - `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
@@ -201,7 +204,7 @@ data/
 - **Per-follower delivery tracking** — Expand the queue to track delivery per-follower, enabling independent retries for failed deliveries
 
 **Activity Types:**
-- **Like** — Per-post likes collection at `/posts/{id}/likes`, with `Undo(Like)` support. See [AP §5.7](https://www.w3.org/TR/activitypub/#likes)
+- **Undo(Like)** — Remove likes via `Undo(Like)` activity. See [AP §5.7](https://www.w3.org/TR/activitypub/#likes)
 - **Announce** — Per-post shares collection at `/posts/{id}/shares`, with `Undo(Announce)`. See [AP §5.8](https://www.w3.org/TR/activitypub/#shares)
 - **Delete** — Tombstoning posts + federated Delete delivery. See [AP §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
 - **EmojiReact** — Rich reactions per [FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md)
@@ -219,6 +222,7 @@ data/
 - ✅ Outbox folder organization with dynamic paginated endpoint
 - ✅ Activity ID microsecond timestamps
 - ✅ Activity processor module with auto-discovery and config-as-parameter
+- ✅ Like activity processing with per-post likes collection and endpoint
 
 ## Design Notes
 

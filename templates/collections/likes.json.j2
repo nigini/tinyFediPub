@@ -1,0 +1,11 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Collection",
+  "id": "{{ likes_id }}",
+  "totalItems": {{ total_items }},
+  "items": [
+    {%- for actor in actors %}
+    "{{ actor }}"{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
+}
