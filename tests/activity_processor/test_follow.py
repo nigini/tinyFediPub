@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for ActivityPub activity processing system
+Unit tests for Follow activity processing
 """
 import unittest
 import tempfile
@@ -10,9 +10,11 @@ import json
 import sys
 from unittest.mock import patch
 
+from tests.test_config import TestConfigMixin
 
-class TestActivityProcessor(unittest.TestCase):
-    """Test activity processing functionality"""
+
+class TestFollowProcessor(unittest.TestCase):
+    """Test Follow activity processing functionality"""
 
     def setUp(self):
         """Set up temporary directory for test files"""
@@ -21,7 +23,6 @@ class TestActivityProcessor(unittest.TestCase):
         os.chdir(self.test_dir)
         sys.path.insert(0, self.original_cwd)
 
-        # Create test config
         self.config = {
             "server": {
                 "domain": "test.example.com",
@@ -55,13 +56,11 @@ class TestActivityProcessor(unittest.TestCase):
         with open('test.pem', 'w') as f:
             f.write('test key')
 
-        # Create required directories
         os.makedirs(self.config['directories']['inbox'], exist_ok=True)
         os.makedirs(self.config['directories']['inbox_queue'], exist_ok=True)
         os.makedirs(self.config['directories']['outbox'], exist_ok=True)
 
     def tearDown(self):
-        """Clean up temporary directory"""
         os.chdir(self.original_cwd)
         shutil.rmtree(self.test_dir)
 
@@ -146,7 +145,6 @@ class TestActivityProcessor(unittest.TestCase):
         """Test Follow processing when auto_accept_follow_requests is false"""
         from activity_processor import FollowProcessor
 
-        # Use config with auto-accept disabled
         config = json.loads(json.dumps(self.config))
         config['activitypub']['auto_accept_follow_requests'] = False
 
@@ -175,6 +173,20 @@ class TestActivityProcessor(unittest.TestCase):
         activities_dir = self.config['directories']['outbox']
         activity_files = [f for f in os.listdir(activities_dir) if f.startswith('accept-')]
         self.assertEqual(len(activity_files), 0, "Should not have created Accept activities when auto-accept is disabled")
+
+    def test_missing_actor_handling(self):
+        """Test handling of activities with missing actor"""
+        from activity_processor import FollowProcessor
+
+        processor = FollowProcessor()
+
+        bad_activity = {
+            "type": "Follow",
+            "object": "https://test.example.com/activitypub/actor"
+        }
+
+        result = processor.process_inbox(bad_activity, "test-no-actor.json", self.config)
+        self.assertFalse(result)
 
     def test_undo_follow_activity_processor(self):
         """Test Undo Follow activity processing"""
@@ -210,7 +222,6 @@ class TestActivityProcessor(unittest.TestCase):
         result = processor.process_inbox(undo_activity, "test-undo.json", self.config)
         self.assertTrue(result)
 
-        # Verify follower was removed
         with open(followers_file) as f:
             updated_followers_data = json.load(f)
 
@@ -224,7 +235,6 @@ class TestActivityProcessor(unittest.TestCase):
 
         processor = UndoFollowProcessor()
 
-        # Create empty followers collection
         followers_dir = self.config['directories']['followers']
         os.makedirs(followers_dir, exist_ok=True)
         followers_data = {
@@ -258,128 +268,10 @@ class TestActivityProcessor(unittest.TestCase):
         self.assertEqual(updated_followers_data['totalItems'], 0)
         self.assertEqual(len(updated_followers_data['items']), 0)
 
-    def test_unknown_activity_processor(self):
-        """Test handling of unknown activity types"""
-        from activity_processor import PROCESSORS
-
-        self.assertNotIn('Announce', PROCESSORS)
-
-    def test_activity_processor_registry(self):
-        """Test that the processor registry is properly configured"""
-        from activity_processor import PROCESSORS, FollowProcessor, UndoActivityProcessor, UndoFollowProcessor
-
-        self.assertIn('Follow', PROCESSORS)
-        self.assertIn('Undo', PROCESSORS)
-        self.assertIn('Undo.Follow', PROCESSORS)
-
-        self.assertIsInstance(PROCESSORS['Follow'], FollowProcessor)
-        self.assertIsInstance(PROCESSORS['Undo'], UndoActivityProcessor)
-        self.assertIsInstance(PROCESSORS['Undo.Follow'], UndoFollowProcessor)
-
-    def test_queue_directory_creation(self):
-        """Test that queue directory is created properly"""
-        from activity_processor import ensure_queue_directory
-
-        queue_dir = self.config['directories']['inbox_queue']
-        if os.path.exists(queue_dir):
-            shutil.rmtree(queue_dir)
-
-        result_dir = ensure_queue_directory(self.config)
-        self.assertTrue(os.path.exists(result_dir))
-        self.assertEqual(result_dir, queue_dir)
-
-    def test_main_processor_empty_queue(self):
-        """Test main processor with empty queue"""
-        from activity_processor import process_queue
-
-        with patch('builtins.print') as mock_print:
-            process_queue(self.config)
-            mock_print.assert_called_with("No activities to process")
-
-    def test_main_processor_with_activities(self):
-        """Test main processor with queued activities"""
-        from activity_processor import process_queue
-
-        follow_activity = {
-            "type": "Follow",
-            "actor": "https://mastodon.social/users/alice",
-            "object": "https://test.example.com/activitypub/actor",
-            "id": "https://mastodon.social/activities/123"
-        }
-
-        inbox_dir = self.config['directories']['inbox']
-        activity_file = os.path.join(inbox_dir, 'follow-test.json')
-        with open(activity_file, 'w') as f:
-            json.dump(follow_activity, f)
-
-        queue_dir = self.config['directories']['inbox_queue']
-        queue_file = os.path.join(queue_dir, 'follow-test.json')
-        os.symlink(os.path.abspath(activity_file), queue_file)
-
-        with patch('builtins.print') as mock_print:
-            process_queue(self.config)
-
-            call_args = [call.args[0] for call in mock_print.call_args_list]
-            self.assertTrue(any('Processing 1 queued activities' in arg for arg in call_args))
-            self.assertTrue(any('Processing Follow activity' in arg for arg in call_args))
-
-    def test_malformed_activity_handling(self):
-        """Test handling of malformed activity files"""
-        from activity_processor import process_queue
-
-        inbox_dir = self.config['directories']['inbox']
-        malformed_file = os.path.join(inbox_dir, 'malformed.json')
-        with open(malformed_file, 'w') as f:
-            f.write('{"invalid": json}')
-
-        queue_dir = self.config['directories']['inbox_queue']
-        queue_file = os.path.join(queue_dir, 'malformed.json')
-        os.symlink(os.path.abspath(malformed_file), queue_file)
-
-        with patch('builtins.print') as mock_print:
-            process_queue(self.config)
-
-            call_args = [call.args[0] for call in mock_print.call_args_list]
-            self.assertTrue(any('Error loading activity' in arg for arg in call_args))
-
-    def test_missing_actor_handling(self):
-        """Test handling of activities with missing actor"""
-        from activity_processor import FollowProcessor
-
-        processor = FollowProcessor()
-
-        bad_activity = {
-            "type": "Follow",
-            "object": "https://test.example.com/activitypub/actor"
-        }
-
-        result = processor.process_inbox(bad_activity, "test-no-actor.json", self.config)
-        self.assertFalse(result)
-
-    def test_undo_non_follow_activity(self):
-        """Test Undo processor with non-Follow objects"""
-        from activity_processor import UndoActivityProcessor
-
-        processor = UndoActivityProcessor()
-
-        undo_like = {
-            "type": "Undo",
-            "actor": "https://mastodon.social/users/alice",
-            "object": {
-                "type": "Like",
-                "actor": "https://mastodon.social/users/alice",
-                "object": "https://test.example.com/activitypub/posts/123"
-            }
-        }
-
-        result = processor.process_inbox(undo_like, "test-undo-like.json", self.config)
-        self.assertTrue(result)  # Should succeed but be ignored
-
     def test_undo_delegation_mechanism(self):
         """Test that UndoActivityProcessor properly delegates to specific processors"""
         from activity_processor import UndoActivityProcessor, FollowProcessor
 
-        # Create a follower first
         follow_processor = FollowProcessor()
         follow_activity = {
             "type": "Follow",
@@ -389,14 +281,12 @@ class TestActivityProcessor(unittest.TestCase):
         }
         follow_processor.process_inbox(follow_activity, "test-follow.json", self.config)
 
-        # Verify follower was added
         followers_dir = self.config['directories']['followers']
         followers_file = os.path.join(followers_dir, 'followers.json')
         with open(followers_file) as f:
             followers_data = json.load(f)
         self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
 
-        # Now test Undo delegation
         undo_processor = UndoActivityProcessor()
         undo_activity = {
             "type": "Undo",
@@ -412,87 +302,33 @@ class TestActivityProcessor(unittest.TestCase):
         result = undo_processor.process_inbox(undo_activity, "test-undo-delegation.json", self.config)
         self.assertTrue(result)
 
-        # Verify follower was removed by the delegated processor
         with open(followers_file) as f:
             followers_data = json.load(f)
         self.assertNotIn('https://mastodon.social/users/alice', followers_data['items'])
         self.assertEqual(followers_data['totalItems'], 0)
 
 
-class TestActivityQueueIntegration(unittest.TestCase):
-    """Test integration between inbox endpoint and activity queue"""
+class TestFollowersEndpointIntegration(unittest.TestCase, TestConfigMixin):
+    """Integration test: followers endpoint reflects processed Follow activities"""
 
     def setUp(self):
-        """Set up test environment"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        sys.path.insert(0, self.original_cwd)
+        self.setup_test_environment("followers_endpoint",
+                                    server={"domain": "test.example.com"},
+                                    activitypub={"username": "test", "actor_name": "Test Actor"})
 
-        self.config = {
-            "server": {"domain": "test.example.com", "protocol": "https", "host": "0.0.0.0", "port": 5000, "debug": True},
-            "activitypub": {"namespace": "activitypub", "username": "test", "actor_name": "Test", "actor_summary": "Test", "auto_accept_follow_requests": True},
-            "security": {"public_key_file": "test.pem", "private_key_file": "test.pem"},
-            "directories": {
-                "inbox": "static/tests/inbox",
-                "inbox_queue": "static/tests/inbox/queue",
-                "data_root": "static/tests",
-                "outbox": "static/tests/outbox",
-                "posts": "static/tests/posts",
-                "followers": "static/tests"
-            }
-        }
-        with open('config.json', 'w') as f:
-            json.dump(self.config, f)
-        with open('test.pem', 'w') as f:
-            f.write('test key')
-
-        # Create and clean test directories
-        for dir_path in self.config['directories'].values():
-            os.makedirs(dir_path, exist_ok=True)
-            for f in os.listdir(dir_path):
-                file_path = os.path.join(dir_path, f)
-                if os.path.islink(file_path):
-                    os.unlink(file_path)
-                elif os.path.isfile(file_path):
-                    os.remove(file_path)
+        from app import app
+        self.app = app
+        self.client = app.test_client()
+        app.config['TESTING'] = True
 
     def tearDown(self):
-        """Clean up"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        self.teardown_test_environment()
 
-    def test_inbox_to_queue_workflow(self):
-        """Test that inbox endpoint properly queues activities"""
-        from app import app, save_inbox_activity, queue_activity_for_processing
+    def test_followers_endpoint_after_follow_processed(self):
+        """Test that /followers reflects a newly processed Follow activity"""
+        from activity_processor import FollowProcessor
 
-        follow_activity = {
-            "type": "Follow",
-            "actor": "https://mastodon.social/users/alice",
-            "object": "https://test.example.com/activitypub/actor"
-        }
-
-        filename = save_inbox_activity(follow_activity)
-        queue_activity_for_processing(filename)
-
-        inbox_dir = self.config['directories']['inbox']
-        inbox_files = [f for f in os.listdir(inbox_dir) if os.path.isfile(os.path.join(inbox_dir, f))]
-        self.assertEqual(len(inbox_files), 1)
-        self.assertTrue(inbox_files[0].startswith('follow-'))
-
-        queue_dir = self.config['directories']['inbox_queue']
-        queue_files = os.listdir(queue_dir)
-        self.assertEqual(len(queue_files), 1)
-        self.assertEqual(queue_files[0], inbox_files[0])
-
-        queue_path = os.path.join(queue_dir, queue_files[0])
-        inbox_path = os.path.join(inbox_dir, inbox_files[0])
-        self.assertTrue(os.path.islink(queue_path))
-        self.assertEqual(os.path.realpath(queue_path), os.path.abspath(inbox_path))
-
-    def test_queue_cleanup_after_processing(self):
-        """Test that queue symlinks are removed after successful processing"""
-        from activity_processor import process_queue
+        processor = FollowProcessor()
 
         follow_activity = {
             "type": "Follow",
@@ -501,22 +337,55 @@ class TestActivityQueueIntegration(unittest.TestCase):
             "id": "https://mastodon.social/activities/123"
         }
 
-        inbox_dir = self.config['directories']['inbox']
-        queue_dir = self.config['directories']['inbox_queue']
+        processor.process_inbox(follow_activity, "follow-test.json", self.config)
 
-        activity_file = os.path.join(inbox_dir, 'follow-test.json')
-        with open(activity_file, 'w') as f:
-            json.dump(follow_activity, f)
+        response = self.client.get(
+            '/activitypub/followers',
+            headers={'Accept': 'application/activity+json'}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['type'], 'Collection')
+        self.assertEqual(data['totalItems'], 1)
+        self.assertIn('https://mastodon.social/users/alice', data['items'])
 
-        queue_file = os.path.join(queue_dir, 'follow-test.json')
-        os.symlink(os.path.abspath(activity_file), queue_file)
+    def test_followers_endpoint_after_undo_follow(self):
+        """Test that /followers reflects an UndoFollow removing a follower"""
+        from activity_processor import UndoFollowProcessor
 
-        self.assertEqual(len(os.listdir(queue_dir)), 1)
+        # Pre-populate followers.json with an existing follower
+        followers_dir = self.config['directories']['followers']
+        followers_data = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Collection",
+            "id": "https://test.example.com/activitypub/followers",
+            "totalItems": 1,
+            "items": ["https://mastodon.social/users/alice"]
+        }
+        with open(os.path.join(followers_dir, 'followers.json'), 'w') as f:
+            json.dump(followers_data, f)
 
-        process_queue(self.config)
+        undo_processor = UndoFollowProcessor()
+        undo_activity = {
+            "type": "Undo",
+            "actor": "https://mastodon.social/users/alice",
+            "object": {
+                "type": "Follow",
+                "actor": "https://mastodon.social/users/alice",
+                "object": "https://test.example.com/activitypub/actor"
+            },
+            "id": "https://mastodon.social/activities/456"
+        }
+        undo_processor.process_inbox(undo_activity, "undo-follow-test.json", self.config)
 
-        self.assertEqual(len(os.listdir(queue_dir)), 0)
-        self.assertTrue(os.path.exists(activity_file))
+        response = self.client.get(
+            '/activitypub/followers',
+            headers={'Accept': 'application/activity+json'}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['totalItems'], 0)
+        self.assertNotIn('https://mastodon.social/users/alice', data['items'])
 
 
 if __name__ == '__main__':
