@@ -47,6 +47,31 @@ def get_post_path(post_id, config):
     posts_dir = config['directories']['posts']
     return os.path.join(posts_dir, post_id, 'post.json')
 
+def resolve_post_uuid_from_url(object_url, config):
+    """
+    Extract post UUID from an ActivityPub object URL if it's a local post.
+
+    Args:
+        object_url: Full URL like 'https://example.com/activitypub/posts/{uuid}'
+        config: Configuration dictionary
+
+    Returns:
+        str: Post UUID if local and exists, None otherwise
+    """
+    base_url = generate_base_url(config)
+    posts_prefix = f"{base_url}/posts/"
+
+    if not object_url.startswith(posts_prefix):
+        return None
+
+    post_uuid = object_url[len(posts_prefix):].strip('/')
+    post_path = get_post_path(post_uuid, config)
+
+    if not os.path.exists(post_path):
+        return None
+
+    return post_uuid
+
 def generate_base_url(config):
     """
     Generate base ActivityPub URL from config

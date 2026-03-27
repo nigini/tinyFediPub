@@ -204,7 +204,6 @@ data/
 - **Per-follower delivery tracking** — Expand the queue to track delivery per-follower, enabling independent retries for failed deliveries
 
 **Activity Types:**
-- **Undo(Like)** — Remove likes via `Undo(Like)` activity. See [AP §5.7](https://www.w3.org/TR/activitypub/#likes)
 - **Announce** — Per-post shares collection at `/posts/{id}/shares`, with `Undo(Announce)`. See [AP §5.8](https://www.w3.org/TR/activitypub/#shares)
 - **Delete** — Tombstoning posts + federated Delete delivery. See [AP §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
 - **EmojiReact** — Rich reactions per [FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md)
@@ -223,6 +222,7 @@ data/
 - ✅ Activity ID microsecond timestamps
 - ✅ Activity processor module with auto-discovery and config-as-parameter
 - ✅ Like activity processing with per-post likes collection and endpoint
+- ✅ Undo(Like) with cleanup of empty likes collections
 
 ## Design Notes
 

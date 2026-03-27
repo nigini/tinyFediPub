@@ -260,6 +260,146 @@ class TestLikeProcessor(unittest.TestCase):
         )
 
 
+class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
+    """Test Undo Like activity processing"""
+
+    def setUp(self):
+        self.setup_test_environment("undo_like",
+                                    server={"domain": "test.example.com"},
+                                    activitypub={"username": "test", "actor_name": "Test Actor"})
+
+        self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
+
+        # Create a test post with likes field
+        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        os.makedirs(post_dir, exist_ok=True)
+        test_post = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Article",
+            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}",
+            "name": "Test Post",
+            "content": "Hello world",
+            "likes": f"https://test.example.com/activitypub/posts/{self.post_uuid}/likes"
+        }
+        with open(os.path.join(post_dir, 'post.json'), 'w') as f:
+            json.dump(test_post, f)
+
+        # Pre-populate likes.json
+        likes_data = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Collection",
+            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}/likes",
+            "totalItems": 1,
+            "items": ["https://mastodon.social/users/alice"]
+        }
+        with open(os.path.join(post_dir, 'likes.json'), 'w') as f:
+            json.dump(likes_data, f)
+
+    def tearDown(self):
+        self.teardown_test_environment()
+
+    def _make_undo_like(self, actor_url):
+        return {
+            "type": "Undo",
+            "actor": actor_url,
+            "object": {
+                "type": "Like",
+                "actor": actor_url,
+                "object": f"https://test.example.com/activitypub/posts/{self.post_uuid}"
+            },
+            "id": f"{actor_url}/activities/undo-like-123"
+        }
+
+    def test_undo_like_removes_actor_and_cleans_up(self):
+        """Test that Undo Like removes actor, deletes likes.json, and removes likes from post.json"""
+        from activity_processor.like import UndoLikeProcessor
+
+        processor = UndoLikeProcessor()
+        result = processor.process_inbox(
+            self._make_undo_like("https://mastodon.social/users/alice"),
+            "undo-like.json", self.config
+        )
+        self.assertTrue(result)
+
+        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+
+        # likes.json should be deleted
+        self.assertFalse(os.path.exists(os.path.join(post_dir, 'likes.json')))
+
+        # post.json should no longer have a 'likes' field
+        with open(os.path.join(post_dir, 'post.json')) as f:
+            post_data = json.load(f)
+        self.assertNotIn('likes', post_data)
+
+    def test_undo_like_nonexistent_like(self):
+        """Test Undo Like when actor hasn't liked the post"""
+        from activity_processor.like import UndoLikeProcessor
+
+        processor = UndoLikeProcessor()
+        result = processor.process_inbox(
+            self._make_undo_like("https://pixelfed.social/users/bob"),
+            "undo-like-nonexistent.json", self.config
+        )
+        self.assertTrue(result)
+
+        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+
+        # Alice's like should still be there
+        with open(os.path.join(post_dir, 'likes.json')) as f:
+            likes_data = json.load(f)
+        self.assertEqual(likes_data['totalItems'], 1)
+        self.assertIn('https://mastodon.social/users/alice', likes_data['items'])
+
+        # post.json should still have likes field
+        with open(os.path.join(post_dir, 'post.json')) as f:
+            post_data = json.load(f)
+        self.assertIn('likes', post_data)
+
+    def test_undo_like_missing_actor(self):
+        """Test that Undo Like with no actor returns False"""
+        from activity_processor.like import UndoLikeProcessor
+
+        processor = UndoLikeProcessor()
+        undo_activity = {
+            "type": "Undo",
+            "object": {
+                "type": "Like",
+                "object": f"https://test.example.com/activitypub/posts/{self.post_uuid}"
+            }
+        }
+        result = processor.process_inbox(undo_activity, "undo-like-no-actor.json", self.config)
+        self.assertFalse(result)
+
+    def test_undo_like_no_likes_file(self):
+        """Test Undo Like when no likes.json exists yet"""
+        from activity_processor.like import UndoLikeProcessor
+
+        # Remove the pre-populated likes.json
+        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        os.remove(os.path.join(post_dir, 'likes.json'))
+
+        processor = UndoLikeProcessor()
+        result = processor.process_inbox(
+            self._make_undo_like("https://mastodon.social/users/alice"),
+            "undo-like-no-file.json", self.config
+        )
+        self.assertTrue(result)
+
+    def test_undo_delegation_to_like(self):
+        """Test that UndoActivityProcessor delegates to UndoLikeProcessor"""
+        from activity_processor import UndoActivityProcessor
+
+        processor = UndoActivityProcessor()
+        result = processor.process_inbox(
+            self._make_undo_like("https://mastodon.social/users/alice"),
+            "undo-like-delegation.json", self.config
+        )
+        self.assertTrue(result)
+
+        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        self.assertFalse(os.path.exists(os.path.join(post_dir, 'likes.json')))
+
+
 class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
     """Integration test: likes collection endpoint on posts"""
 
@@ -332,6 +472,29 @@ class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
         """Test that /posts/{uuid}/likes returns 404 when no likes.json exists"""
         response = self.client.get(
             f'/activitypub/posts/{self.post_uuid_no_likes}/likes',
+            headers={'Accept': 'application/activity+json'}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_likes_endpoint_after_undo_like(self):
+        """Test that /posts/{uuid}/likes returns 404 after last like is undone"""
+        from activity_processor.like import UndoLikeProcessor
+
+        processor = UndoLikeProcessor()
+        undo_activity = {
+            "type": "Undo",
+            "actor": "https://mastodon.social/users/alice",
+            "object": {
+                "type": "Like",
+                "actor": "https://mastodon.social/users/alice",
+                "object": f"https://test.example.com/activitypub/posts/{self.post_uuid}"
+            },
+            "id": "https://mastodon.social/activities/undo-like-123"
+        }
+        processor.process_inbox(undo_activity, "undo-like.json", self.config)
+
+        response = self.client.get(
+            f'/activitypub/posts/{self.post_uuid}/likes',
             headers={'Accept': 'application/activity+json'}
         )
         self.assertEqual(response.status_code, 404)

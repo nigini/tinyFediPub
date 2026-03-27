@@ -147,23 +147,23 @@ class TestActivityProcessor(unittest.TestCase):
             call_args = [call.args[0] for call in mock_print.call_args_list]
             self.assertTrue(any('Error loading activity' in arg for arg in call_args))
 
-    def test_undo_non_follow_activity(self):
-        """Test Undo processor with non-Follow objects"""
+    def test_undo_unhandled_activity_type(self):
+        """Test Undo processor with unhandled object types"""
         from activity_processor import UndoActivityProcessor
 
         processor = UndoActivityProcessor()
 
-        undo_like = {
+        undo_announce = {
             "type": "Undo",
             "actor": "https://mastodon.social/users/alice",
             "object": {
-                "type": "Like",
+                "type": "Announce",
                 "actor": "https://mastodon.social/users/alice",
                 "object": "https://test.example.com/activitypub/posts/123"
             }
         }
 
-        result = processor.process_inbox(undo_like, "test-undo-like.json", self.config)
+        result = processor.process_inbox(undo_announce, "test-undo-announce.json", self.config)
         self.assertTrue(result)  # Should succeed but be ignored
 
 
