@@ -162,6 +162,10 @@ templates/
 - **HTTP Signature Verification** - Cryptographic validation of incoming activities (configurable)
 - **HTTP Signature Signing** - Sign outgoing activities for secure delivery
 - **Likes Collection** - Per-post likes tracking with collection endpoint at `/posts/{id}/likes`
+- **C2S Bearer Token Auth** - Token-based authentication for client-to-server endpoints
+- **C2S Outbox POST** - Clients submit AS2 objects, server wraps in Create activity and delivers
+- **Streams/Posts** - Object-centric paginated collection of posts (not activities) with inline reaction summaries
+- **Actor Streams Discovery** - Actor profile includes `streams` array for client discovery
 
 **File Structure:**
 ```
@@ -170,8 +174,10 @@ data/
 ├── followers.json       # Collection of followers (auto-generated)
 ├── posts/               # Individual post objects (UUID directories)
 │   └── {uuid}/
-│       ├── post.json
-│       └── likes.json   # Per-post likes collection (auto-generated)
+│       ├── post.json       # Post object with inline reaction summaries
+│       ├── likes.json      # OrderedCollection of actors who liked
+│       ├── shares.json     # OrderedCollection of actors who shared
+│       └── replies.json    # OrderedCollection of replies
 ├── outbox/              # Outgoing activity objects
 │   └── create-20250921-143022-123456.json
 └── inbox/               # Received activities from other servers
@@ -208,24 +214,19 @@ data/
 - **Delete** — Tombstoning posts + federated Delete delivery. See [AP §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
 - **EmojiReact** — Rich reactions per [FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md)
 
+**Client-to-Server:**
+- **Following** — Send Follow activities, maintain `following.json`, handle Accept/Reject
+- **Inbox materialization** — `streams/home` with objects from followed actors
+- **Microsyntax processing** — Server-side `@mention` / `#hashtag` / URL resolution on outbox POST
+- **Object Integrity Proofs** — Self-authenticating posts via [FEP-8fcf](https://codeberg.org/fediverse/fep), embedding cryptographic signatures in objects (like Nostr's `sig`)
+
 **Other:**
 - Proper logging system (replace `print()` with Python's `logging` module)
 - Manual follow approval workflow
 - Mention and reply handling
-- Client-to-Server endpoints (see `docs/C2S.md` for design)
-
-**Completed:**
-- ✅ Deprecation fixes (Python 3.11+ datetime)
-- ✅ Update Activity support with federated notifications
-- ✅ UUID-based post IDs with dedicated directories
-- ✅ Outbox folder organization with dynamic paginated endpoint
-- ✅ Activity ID microsecond timestamps
-- ✅ Activity processor module with auto-discovery and config-as-parameter
-- ✅ Like activity processing with per-post likes collection and endpoint
-- ✅ Undo(Like) with cleanup of empty likes collections
 
 ## Design Notes
 
 See `docs/` for detailed design documents:
-- `docs/C2S.md` — Client-to-Server API design
+- `docs/CLIENT_CONTRACT.md` — What tinyFedi guarantees to clients (normalization, streams, auth)
 - `docs/AP_Federation/SignaturesFlows.md` — HTTP signature flows
