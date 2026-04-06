@@ -120,6 +120,45 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         self.assertNotIn('name', note_obj)  # Notes typically don't have titles
         self.assertEqual(note_obj['content'], "Just shared something interesting! Check it out:")
 
+    def test_post_has_reaction_collection_summaries(self):
+        """Posts should include inline collection summaries for likes, shares, replies"""
+        post_obj, post_id = create_post('article', "Test", "Content", "https://example.com/test")
+
+        base_url = "https://test.example.com/activitypub/posts"
+
+        for collection_name in ('likes', 'shares', 'replies'):
+            coll = post_obj[collection_name]
+            self.assertEqual(coll['type'], 'OrderedCollection')
+            self.assertEqual(coll['id'], f"{base_url}/{post_id}/{collection_name}")
+            self.assertEqual(coll['totalItems'], 0)
+
+    def test_note_has_reaction_collection_summaries(self):
+        """Notes should also include reaction collection summaries"""
+        post_obj, post_id = create_post('note', None, "Hello!", "https://example.com/note")
+
+        for collection_name in ('likes', 'shares', 'replies'):
+            coll = post_obj[collection_name]
+            self.assertEqual(coll['type'], 'OrderedCollection')
+            self.assertEqual(coll['totalItems'], 0)
+
+    def test_reaction_collection_files_created(self):
+        """Post creation should create empty collection files on disk"""
+        post_obj, post_id = create_post('article', "Test", "Content", "https://example.com/test")
+
+        base_url = "https://test.example.com/activitypub/posts"
+
+        for collection_name in ('likes', 'shares', 'replies'):
+            filepath = self.get_test_file_path('posts', f'{post_id}/{collection_name}.json')
+            self.assertTrue(os.path.exists(filepath),
+                            f"{collection_name}.json should exist in post directory")
+
+            with open(filepath, 'r') as f:
+                coll = json.load(f)
+            self.assertEqual(coll['type'], 'OrderedCollection')
+            self.assertEqual(coll['id'], f"{base_url}/{post_id}/{collection_name}")
+            self.assertEqual(coll['totalItems'], 0)
+            self.assertEqual(coll['orderedItems'], [])
+
     def test_create_activity(self):
         """Test activity creation and file saving"""
         # First create a post

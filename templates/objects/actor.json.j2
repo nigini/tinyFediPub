@@ -9,7 +9,10 @@
   "outbox": "{{ website_url }}/{{ namespace }}/outbox",
   "followers": "{{ website_url }}/{{ namespace }}/followers",
   "following": "{{ website_url }}/{{ namespace }}/following",
-  "url": "{{ website_url }}"{% if public_key_pem or icon or image %},{% endif %}
+  "url": "{{ website_url }}",
+  "streams": [
+    "{{ website_url }}/{{ namespace }}/streams/posts"
+  ]{% if public_key_pem or icon or image %},{% endif %}
   {% if public_key_pem %}
   "publicKey": {
     "id": "{{ website_url }}/{{ namespace }}/actor#main-key",

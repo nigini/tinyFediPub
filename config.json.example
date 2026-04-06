@@ -18,7 +18,8 @@
   "security": {
     "public_key_file": "keys/public_key.pem",
     "private_key_file": "keys/private_key.pem",
-    "require_http_signatures": false
+    "require_http_signatures": false,
+    "c2s_token": "REPLACE_ME: run `python -c \"import secrets; print(secrets.token_hex(32))\"` and paste here"
   },
   "directories": {
     "inbox": "data/inbox",

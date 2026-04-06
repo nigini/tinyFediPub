@@ -67,15 +67,24 @@ class TestFlaskApp(unittest.TestCase, TestConfigMixin):
     def test_actor_endpoint(self):
         """Test actor profile endpoint"""
         response = self.client.get('/activitypub/actor', headers={'Accept': 'application/activity+json'})
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Content-Type'], 'application/activity+json')
-        
+
         data = response.get_json()
         self.assertEqual(data['@context'], 'https://www.w3.org/ns/activitystreams')
         self.assertEqual(data['type'], 'Person')
         self.assertEqual(data['preferredUsername'], 'testuser')
         self.assertEqual(data['name'], 'Test User')
+
+    def test_actor_has_streams(self):
+        """Test actor profile includes streams property with available stream URLs"""
+        response = self.client.get('/activitypub/actor', headers={'Accept': 'application/activity+json'})
+        data = response.get_json()
+
+        self.assertIn('streams', data)
+        self.assertIsInstance(data['streams'], list)
+        self.assertIn('https://app-test.example.com/activitypub/streams/posts', data['streams'])
     
     def test_actor_wrong_content_type(self):
         """Test actor endpoint with wrong Accept header"""

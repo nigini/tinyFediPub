@@ -8,5 +8,8 @@
   "updated": "{{ updated }}"{% endif %}{% if title %},
   "name": "{{ title }}"{% endif %}{% if content %},
   "content": "{{ content }}"{% endif %}{% if summary %},
-  "summary": "{{ summary }}"{% endif %}
+  "summary": "{{ summary }}"{% endif %},
+  "likes": {"type": "OrderedCollection", "id": "{{ website_url }}/{{ namespace }}/posts/{{ post_id }}/likes", "totalItems": 0},
+  "shares": {"type": "OrderedCollection", "id": "{{ website_url }}/{{ namespace }}/posts/{{ post_id }}/shares", "totalItems": 0},
+  "replies": {"type": "OrderedCollection", "id": "{{ website_url }}/{{ namespace }}/posts/{{ post_id }}/replies", "totalItems": 0}
 }

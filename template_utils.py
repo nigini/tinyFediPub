@@ -208,27 +208,40 @@ class ActivityPubTemplates:
 
         return self.render_json_template('collections/followers.json.j2', **template_data)
 
+    def render_ordered_collection(self, collection_id, items=None):
+        """
+        Render a generic OrderedCollection template
+
+        Args:
+            collection_id: Collection ID (URL)
+            items: List of items (URLs or objects). Empty list if None.
+
+        Returns:
+            dict: OrderedCollection JSON object
+        """
+        if items is None:
+            items = []
+
+        return self.render_json_template('collections/ordered_collection.json.j2',
+            collection_id=collection_id,
+            total_items=len(items),
+            items=items
+        )
+
     def render_likes_collection(self, likes_id, actors_list=None):
         """
-        Render likes collection template
+        Render likes collection as an OrderedCollection
 
         Args:
             likes_id: Collection ID
             actors_list: List of actor URLs who liked the post (empty list if None)
 
         Returns:
-            dict: Likes collection JSON object
+            dict: OrderedCollection JSON object
         """
         if actors_list is None:
             actors_list = []
-
-        template_data = {
-            'likes_id': likes_id,
-            'total_items': len(actors_list),
-            'actors': actors_list
-        }
-
-        return self.render_json_template('collections/likes.json.j2', **template_data)
+        return self.render_ordered_collection(likes_id, actors_list)
 
     def render_outbox_collection(self, outbox_id, total_items, items, next_page=None, prev_page=None):
         """

@@ -212,11 +212,20 @@ def create_post(post_type, title, content, url, summary=None):
     # Save post file in dedicated directory
     config = load_config()
     post_path = get_post_path(post_id, config)
-    os.makedirs(os.path.dirname(post_path), exist_ok=True)
+    post_dir = os.path.dirname(post_path)
+    os.makedirs(post_dir, exist_ok=True)
     with open(post_path, 'w') as f:
         json.dump(post, f, indent=2)
     print(f"✓ Created post: {post_path}")
-    
+
+    # Create empty reaction collection files
+    base_url = generate_base_url(config)
+    for name in ('likes', 'shares', 'replies'):
+        collection = templates.render_ordered_collection(
+            collection_id=f"{base_url}/posts/{post_id}/{name}")
+        with open(os.path.join(post_dir, f'{name}.json'), 'w') as f:
+            json.dump(collection, f, indent=2)
+
     return post, post_id
 
 def update_post(post_id, title=None, content=None, url=None, summary=None):

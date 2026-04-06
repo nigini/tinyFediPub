@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+import glob
 import json
 import os
 from template_utils import templates
@@ -81,6 +82,21 @@ def require_activitypub_accept(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def require_c2s_auth(f):
+    """Decorator to validate Bearer token for C2S endpoints"""
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        token = config['security'].get('c2s_token')
+        if not token or token == 'REPLACE_ME':
+            return jsonify({'error': 'C2S token not configured'}), 500
+        if auth != f'Bearer {token}':
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/.well-known/webfinger')
 def webfinger():
     """WebFinger endpoint for actor discovery"""
@@ -98,54 +114,110 @@ def actor():
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
-@app.route(f'/{NAMESPACE}/outbox')
-@require_activitypub_accept
-def outbox():
-    """Outbox endpoint - paginated collection of activities"""
-    max_page_size = config['activitypub'].get('max_page_size', 20)
-    outbox_dir = config['directories']['outbox']
-    os.makedirs(outbox_dir, exist_ok=True)
+def list_json_files(pattern, sort_key='name', reverse=True):
+    """List JSON files matching a glob pattern, sorted. Does NOT load them.
 
-    # Client can request smaller pages via ?limit=, capped at max_page_size
-    page_size = request.args.get('limit', max_page_size, type=int)
-    page_size = max(1, min(page_size, max_page_size))
+    Args:
+        pattern: Glob pattern (e.g., 'data/outbox/*.json' or 'data/posts/*/post.json')
+        sort_key: 'name' for filename sort, 'mtime' for modification time
+        reverse: True for reverse (most recent first)
 
-    # List activity files in reverse chronological order (filenames are {type}-{timestamp}.json)
-    activity_files = sorted(
-        [f for f in os.listdir(outbox_dir) if f.endswith('.json')],
-        reverse=True
-    )
-    total_items = len(activity_files)
+    Returns:
+        list of file paths, sorted
+    """
+    paths = glob.glob(pattern)
+    if sort_key == 'mtime':
+        paths.sort(key=os.path.getmtime, reverse=reverse)
+    else:
+        paths.sort(reverse=reverse)
+    return paths
 
-    # Determine page
-    page = request.args.get('page', 1, type=int)
-    page = max(1, page)
-    start = (page - 1) * page_size
-    page_files = activity_files[start:start + page_size]
-
-    # Load full activity objects for this page
+def load_json_files(filepaths):
+    """Load JSON from a list of file paths. Skips files that fail to parse."""
     items = []
-    for filename in page_files:
-        filepath = os.path.join(outbox_dir, filename)
+    for filepath in filepaths:
         try:
             with open(filepath, 'r') as f:
                 items.append(json.load(f))
         except (json.JSONDecodeError, FileNotFoundError):
             continue
+    return items
 
-    # Compute pagination links
-    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/outbox"
-    next_page = f"{base_url}?page={page + 1}" if start + page_size < total_items else None
-    prev_page = f"{base_url}?page={page - 1}" if page > 1 else None
+def paginate_collection(all_paths, collection_url):
+    """Paginate a sorted list of file paths: slice first, then load only the page.
 
-    outbox_data = templates.render_outbox_collection(
-        outbox_id=base_url,
+    Reads ?page= and ?limit= from Flask request context.
+    Returns an OrderedCollection dict with pagination links.
+    """
+    max_page_size = config['activitypub'].get('max_page_size', 20)
+    page_size = request.args.get('limit', max_page_size, type=int)
+    page_size = max(1, min(page_size, max_page_size))
+
+    total_items = len(all_paths)
+
+    page = request.args.get('page', 1, type=int)
+    page = max(1, page)
+    start = (page - 1) * page_size
+    page_paths = all_paths[start:start + page_size]
+
+    items = load_json_files(page_paths)
+
+    next_page = f"{collection_url}?page={page + 1}" if start + page_size < total_items else None
+    prev_page = f"{collection_url}?page={page - 1}" if page > 1 else None
+
+    return templates.render_outbox_collection(
+        outbox_id=collection_url,
         total_items=total_items,
         items=items,
         next_page=next_page,
         prev_page=prev_page
     )
-    response = jsonify(outbox_data)
+
+@app.route(f'/{NAMESPACE}/outbox', methods=['GET', 'POST'])
+def outbox():
+    """Outbox endpoint - GET returns activities, POST creates new content (C2S)"""
+    if request.method == 'GET':
+        return outbox_get()
+    else:
+        return outbox_post()
+
+@require_activitypub_accept
+def outbox_get():
+    """GET outbox - paginated collection of activities (public, for S2S)"""
+    outbox_dir = config['directories']['outbox']
+    os.makedirs(outbox_dir, exist_ok=True)
+    paths = list_json_files(os.path.join(outbox_dir, '*.json'))
+    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/outbox"
+
+    response = jsonify(paginate_collection(paths, base_url))
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
+@require_c2s_auth
+def outbox_post():
+    """POST outbox - accept AS2 object, wrap in Create activity (C2S, authenticated)"""
+    from post_utils import create_post, create_activity, generate_base_url
+
+    data = request.get_json(silent=True)
+    if not data or 'type' not in data:
+        return jsonify({'error': 'Invalid object: missing type'}), 400
+
+    obj_type = data['type'].lower()
+    content = data.get('content', '')
+    title = data.get('name')
+    url = data.get('url', '')
+    summary = data.get('summary')
+
+    post_type = 'article' if obj_type == 'article' else 'note'
+    post_obj, post_id = create_post(post_type, title, content, url, summary)
+    activity_obj, activity_id = create_activity(post_obj, post_id)
+
+    base_url = generate_base_url(config)
+    activity_url = f"{base_url}/activities/{activity_id}"
+
+    response = jsonify(activity_obj)
+    response.status_code = 201
+    response.headers['Location'] = activity_url
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
@@ -262,6 +334,20 @@ def followers():
     ensure_followers_file_exists()
 
     response = jsonify(load_json_file('followers.json'))
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
+@app.route(f'/{NAMESPACE}/streams/posts')
+@require_c2s_auth
+@require_activitypub_accept
+def streams_posts():
+    """Streams/posts endpoint - paginated collection of post objects (not activities)"""
+    posts_dir = config['directories']['posts']
+    os.makedirs(posts_dir, exist_ok=True)
+    paths = list_json_files(os.path.join(posts_dir, '*/post.json'), sort_key='mtime')
+    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/streams/posts"
+
+    response = jsonify(paginate_collection(paths, base_url))
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 

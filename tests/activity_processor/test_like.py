@@ -62,18 +62,33 @@ class TestLikeProcessor(unittest.TestCase):
         os.makedirs(self.config['directories']['inbox_queue'], exist_ok=True)
         os.makedirs(self.config['directories']['outbox'], exist_ok=True)
 
-        # Create a test post for Like targets
+        # Create a test post with empty reaction collections (matches post template spec)
         post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
+        post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Article",
-            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}",
+            "id": post_base,
             "name": "Test Post",
-            "content": "Hello world"
+            "content": "Hello world",
+            "likes": {"type": "OrderedCollection", "id": f"{post_base}/likes", "totalItems": 0},
+            "shares": {"type": "OrderedCollection", "id": f"{post_base}/shares", "totalItems": 0},
+            "replies": {"type": "OrderedCollection", "id": f"{post_base}/replies", "totalItems": 0}
         }
         with open(os.path.join(post_dir, 'post.json'), 'w') as f:
             json.dump(test_post, f)
+
+        # Create empty likes.json (matches post creation spec)
+        empty_likes = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "OrderedCollection",
+            "id": f"{post_base}/likes",
+            "totalItems": 0,
+            "orderedItems": []
+        }
+        with open(os.path.join(post_dir, 'likes.json'), 'w') as f:
+            json.dump(empty_likes, f)
 
     def tearDown(self):
         """Clean up temporary directory"""
@@ -105,9 +120,9 @@ class TestLikeProcessor(unittest.TestCase):
         with open(likes_path) as f:
             likes_data = json.load(f)
 
-        self.assertEqual(likes_data['type'], 'Collection')
+        self.assertEqual(likes_data['type'], 'OrderedCollection')
         self.assertEqual(likes_data['totalItems'], 1)
-        self.assertIn('https://mastodon.social/users/alice', likes_data['items'])
+        self.assertIn('https://mastodon.social/users/alice', likes_data['orderedItems'])
 
     def test_like_activity_missing_actor(self):
         """Test that a Like with no actor returns False"""
@@ -197,7 +212,7 @@ class TestLikeProcessor(unittest.TestCase):
             likes_data = json.load(f)
 
         self.assertEqual(likes_data['totalItems'], 1)
-        self.assertEqual(len(likes_data['items']), 1)
+        self.assertEqual(len(likes_data['orderedItems']), 1)
 
     def test_multiple_actors_like_same_post(self):
         """Test that multiple actors can like the same post"""
@@ -228,11 +243,11 @@ class TestLikeProcessor(unittest.TestCase):
             likes_data = json.load(f)
 
         self.assertEqual(likes_data['totalItems'], 2)
-        self.assertIn('https://mastodon.social/users/alice', likes_data['items'])
-        self.assertIn('https://pixelfed.social/users/bob', likes_data['items'])
+        self.assertIn('https://mastodon.social/users/alice', likes_data['orderedItems'])
+        self.assertIn('https://pixelfed.social/users/bob', likes_data['orderedItems'])
 
-    def test_like_adds_likes_field_to_post(self):
-        """Test that processing a Like adds a 'likes' collection URL to post.json"""
+    def test_like_updates_post_and_collection(self):
+        """Test that processing a Like updates both post.json summary and likes.json"""
         from activity_processor.like import LikeProcessor
 
         processor = LikeProcessor()
@@ -246,18 +261,22 @@ class TestLikeProcessor(unittest.TestCase):
 
         processor.process_inbox(like_activity, "like-test.json", self.config)
 
-        # Load the post.json and verify it now has a likes field
-        post_path = os.path.join(
-            self.config['directories']['posts'], self.post_uuid, 'post.json'
-        )
-        with open(post_path) as f:
-            post_data = json.load(f)
+        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
 
-        self.assertIn('likes', post_data)
-        self.assertEqual(
-            post_data['likes'],
-            f"https://test.example.com/activitypub/posts/{self.post_uuid}/likes"
-        )
+        # post.json: likes summary should have updated totalItems
+        with open(os.path.join(post_dir, 'post.json')) as f:
+            post_data = json.load(f)
+        self.assertEqual(post_data['likes']['type'], 'OrderedCollection')
+        self.assertEqual(post_data['likes']['totalItems'], 1)
+        # shares and replies should be unchanged
+        self.assertEqual(post_data['shares']['totalItems'], 0)
+        self.assertEqual(post_data['replies']['totalItems'], 0)
+
+        # likes.json: should contain the actor
+        with open(os.path.join(post_dir, 'likes.json')) as f:
+            likes_data = json.load(f)
+        self.assertEqual(likes_data['totalItems'], 1)
+        self.assertIn('https://mastodon.social/users/alice', likes_data['orderedItems'])
 
 
 class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
@@ -270,27 +289,30 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
 
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
-        # Create a test post with likes field
+        # Create a test post with one existing like (matches post template spec)
         post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
+        post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Article",
-            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}",
+            "id": post_base,
             "name": "Test Post",
             "content": "Hello world",
-            "likes": f"https://test.example.com/activitypub/posts/{self.post_uuid}/likes"
+            "likes": {"type": "OrderedCollection", "id": f"{post_base}/likes", "totalItems": 1},
+            "shares": {"type": "OrderedCollection", "id": f"{post_base}/shares", "totalItems": 0},
+            "replies": {"type": "OrderedCollection", "id": f"{post_base}/replies", "totalItems": 0}
         }
         with open(os.path.join(post_dir, 'post.json'), 'w') as f:
             json.dump(test_post, f)
 
-        # Pre-populate likes.json
+        # Pre-populate likes.json with one like
         likes_data = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Collection",
-            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}/likes",
+            "id": f"{post_base}/likes",
             "totalItems": 1,
-            "items": ["https://mastodon.social/users/alice"]
+            "orderedItems": ["https://mastodon.social/users/alice"]
         }
         with open(os.path.join(post_dir, 'likes.json'), 'w') as f:
             json.dump(likes_data, f)
@@ -310,8 +332,8 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
             "id": f"{actor_url}/activities/undo-like-123"
         }
 
-    def test_undo_like_removes_actor_and_cleans_up(self):
-        """Test that Undo Like removes actor, deletes likes.json, and removes likes from post.json"""
+    def test_undo_like_removes_actor_and_updates_summary(self):
+        """Test that Undo Like removes actor, resets likes.json, and updates post.json summary"""
         from activity_processor.like import UndoLikeProcessor
 
         processor = UndoLikeProcessor()
@@ -323,13 +345,19 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
 
         post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
 
-        # likes.json should be deleted
-        self.assertFalse(os.path.exists(os.path.join(post_dir, 'likes.json')))
+        # likes.json should be empty collection (not deleted)
+        likes_path = os.path.join(post_dir, 'likes.json')
+        self.assertTrue(os.path.exists(likes_path))
+        with open(likes_path) as f:
+            likes_data = json.load(f)
+        self.assertEqual(likes_data['totalItems'], 0)
+        self.assertEqual(likes_data['orderedItems'], [])
 
-        # post.json should no longer have a 'likes' field
+        # post.json should still have likes summary, but with totalItems: 0
         with open(os.path.join(post_dir, 'post.json')) as f:
             post_data = json.load(f)
-        self.assertNotIn('likes', post_data)
+        self.assertIn('likes', post_data)
+        self.assertEqual(post_data['likes']['totalItems'], 0)
 
     def test_undo_like_nonexistent_like(self):
         """Test Undo Like when actor hasn't liked the post"""
@@ -348,7 +376,7 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         with open(os.path.join(post_dir, 'likes.json')) as f:
             likes_data = json.load(f)
         self.assertEqual(likes_data['totalItems'], 1)
-        self.assertIn('https://mastodon.social/users/alice', likes_data['items'])
+        self.assertIn('https://mastodon.social/users/alice', likes_data['orderedItems'])
 
         # post.json should still have likes field
         with open(os.path.join(post_dir, 'post.json')) as f:
@@ -397,7 +425,10 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(result)
 
         post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
-        self.assertFalse(os.path.exists(os.path.join(post_dir, 'likes.json')))
+        with open(os.path.join(post_dir, 'likes.json')) as f:
+            likes_data = json.load(f)
+        self.assertEqual(likes_data['totalItems'], 0)
+        self.assertEqual(likes_data['orderedItems'], [])
 
 
 class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
@@ -410,43 +441,60 @@ class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
 
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
-        # Create a test post
+        # Create a test post with one like
         post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
+        post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Article",
-            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}",
+            "id": post_base,
             "name": "Test Post",
-            "content": "Hello world"
+            "content": "Hello world",
+            "likes": {"type": "OrderedCollection", "id": f"{post_base}/likes", "totalItems": 1},
+            "shares": {"type": "OrderedCollection", "id": f"{post_base}/shares", "totalItems": 0},
+            "replies": {"type": "OrderedCollection", "id": f"{post_base}/replies", "totalItems": 0}
         }
         with open(os.path.join(post_dir, 'post.json'), 'w') as f:
             json.dump(test_post, f)
 
-        # Create a likes collection for that post
         likes_data = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Collection",
-            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}/likes",
+            "id": f"{post_base}/likes",
             "totalItems": 1,
-            "items": ["https://mastodon.social/users/alice"]
+            "orderedItems": ["https://mastodon.social/users/alice"]
         }
         with open(os.path.join(post_dir, 'likes.json'), 'w') as f:
             json.dump(likes_data, f)
 
-        # Create a second post with no likes
+        # Create a second post with no likes (empty collection)
         self.post_uuid_no_likes = "660e8400-e29b-41d4-a716-446655440000"
         post_dir_2 = os.path.join(self.config['directories']['posts'], self.post_uuid_no_likes)
         os.makedirs(post_dir_2, exist_ok=True)
+        post_base_2 = f"https://test.example.com/activitypub/posts/{self.post_uuid_no_likes}"
         test_post_2 = {
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Article",
-            "id": f"https://test.example.com/activitypub/posts/{self.post_uuid_no_likes}",
+            "id": post_base_2,
             "name": "Another Post",
-            "content": "No likes yet"
+            "content": "No likes yet",
+            "likes": {"type": "OrderedCollection", "id": f"{post_base_2}/likes", "totalItems": 0},
+            "shares": {"type": "OrderedCollection", "id": f"{post_base_2}/shares", "totalItems": 0},
+            "replies": {"type": "OrderedCollection", "id": f"{post_base_2}/replies", "totalItems": 0}
         }
         with open(os.path.join(post_dir_2, 'post.json'), 'w') as f:
             json.dump(test_post_2, f)
+
+        empty_likes = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "OrderedCollection",
+            "id": f"{post_base_2}/likes",
+            "totalItems": 0,
+            "orderedItems": []
+        }
+        with open(os.path.join(post_dir_2, 'likes.json'), 'w') as f:
+            json.dump(empty_likes, f)
 
         from app import app
         self.app = app
@@ -466,18 +514,20 @@ class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
         data = response.get_json()
         self.assertEqual(data['type'], 'Collection')
         self.assertEqual(data['totalItems'], 1)
-        self.assertIn('https://mastodon.social/users/alice', data['items'])
+        self.assertIn('https://mastodon.social/users/alice', data['orderedItems'])
 
-    def test_likes_endpoint_no_likes(self):
-        """Test that /posts/{uuid}/likes returns 404 when no likes.json exists"""
+    def test_likes_endpoint_empty_collection(self):
+        """Test that /posts/{uuid}/likes returns empty collection when no likes"""
         response = self.client.get(
             f'/activitypub/posts/{self.post_uuid_no_likes}/likes',
             headers={'Accept': 'application/activity+json'}
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['totalItems'], 0)
 
     def test_likes_endpoint_after_undo_like(self):
-        """Test that /posts/{uuid}/likes returns 404 after last like is undone"""
+        """Test that /posts/{uuid}/likes returns empty collection after last like is undone"""
         from activity_processor.like import UndoLikeProcessor
 
         processor = UndoLikeProcessor()
@@ -497,7 +547,10 @@ class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
             f'/activitypub/posts/{self.post_uuid}/likes',
             headers={'Accept': 'application/activity+json'}
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['totalItems'], 0)
+        self.assertEqual(data['orderedItems'], [])
 
     def test_likes_endpoint_nonexistent_post(self):
         """Test that /posts/{uuid}/likes returns 404 for unknown post"""

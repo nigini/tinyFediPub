@@ -21,7 +21,7 @@ def _get_likes_list(post_uuid, config):
     if os.path.exists(likes_path):
         with open(likes_path, 'r') as f:
             likes_data = json.load(f)
-        return likes_data.get('items', [])
+        return likes_data.get('orderedItems', likes_data.get('items', []))
 
     return []
 
@@ -53,20 +53,22 @@ class LikeProcessor(BaseActivityProcessor):
 
         return True
 
-    def _update_post_likes_field(self, post_uuid, config):
-        """Add likes collection URL to post.json if not already present."""
+    def _update_post_likes_summary(self, post_uuid, likes_count, config):
+        """Update the likes collection summary in post.json with current count."""
         post_path = get_post_path(post_uuid, config)
 
         with open(post_path, 'r') as f:
             post_data = json.load(f)
 
         base_url = generate_base_url(config)
-        likes_url = f"{base_url}/posts/{post_uuid}/likes"
+        post_data['likes'] = {
+            "type": "OrderedCollection",
+            "id": f"{base_url}/posts/{post_uuid}/likes",
+            "totalItems": likes_count
+        }
 
-        if post_data.get('likes') != likes_url:
-            post_data['likes'] = likes_url
-            with open(post_path, 'w') as f:
-                json.dump(post_data, f, indent=2)
+        with open(post_path, 'w') as f:
+            json.dump(post_data, f, indent=2)
 
     def process_inbox(self, activity, filename, config):
         """Process Like activity - add to post's likes collection"""
@@ -93,7 +95,8 @@ class LikeProcessor(BaseActivityProcessor):
             else:
                 print(f"Like from {actor_url} already exists for post {post_uuid}")
 
-            self._update_post_likes_field(post_uuid, config)
+            likes_count = len(_get_likes_list(post_uuid, config))
+            self._update_post_likes_summary(post_uuid, likes_count, config)
 
             print(f"Successfully processed Like from {actor_url}")
             return True
@@ -115,36 +118,38 @@ class UndoLikeProcessor(BaseActivityProcessor):
 
         likes_list.remove(actor_url)
 
+        base_url = generate_base_url(config)
+        likes_id = f"{base_url}/posts/{post_uuid}/likes"
+        likes_collection = templates.render_likes_collection(
+            likes_id=likes_id,
+            actors_list=likes_list
+        )
+
         posts_dir = config['directories']['posts']
         likes_path = os.path.join(posts_dir, post_uuid, 'likes.json')
+        with open(likes_path, 'w') as f:
+            json.dump(likes_collection, f, indent=2)
 
-        if not likes_list:
-            # Last like removed — delete likes.json and clean up post.json
-            os.remove(likes_path)
-            self._remove_post_likes_field(post_uuid, config)
-        else:
-            base_url = generate_base_url(config)
-            likes_id = f"{base_url}/posts/{post_uuid}/likes"
-            likes_collection = templates.render_likes_collection(
-                likes_id=likes_id,
-                actors_list=likes_list
-            )
-            with open(likes_path, 'w') as f:
-                json.dump(likes_collection, f, indent=2)
+        self._update_post_likes_summary(post_uuid, len(likes_list), config)
 
         return True
 
-    def _remove_post_likes_field(self, post_uuid, config):
-        """Remove likes field from post.json."""
+    def _update_post_likes_summary(self, post_uuid, likes_count, config):
+        """Update the likes collection summary in post.json."""
         post_path = get_post_path(post_uuid, config)
 
         with open(post_path, 'r') as f:
             post_data = json.load(f)
 
-        if 'likes' in post_data:
-            del post_data['likes']
-            with open(post_path, 'w') as f:
-                json.dump(post_data, f, indent=2)
+        base_url = generate_base_url(config)
+        post_data['likes'] = {
+            "type": "OrderedCollection",
+            "id": f"{base_url}/posts/{post_uuid}/likes",
+            "totalItems": likes_count
+        }
+
+        with open(post_path, 'w') as f:
+            json.dump(post_data, f, indent=2)
 
     def process_inbox(self, activity, filename, config):
         """Process Undo Like activity - remove from post's likes collection"""
