@@ -19,11 +19,11 @@
     "public_key_file": "keys/public_key.pem",
     "private_key_file": "keys/private_key.pem",
     "require_http_signatures": false,
-    "c2s_token": "REPLACE_ME: run `python -c \"import secrets; print(secrets.token_hex(32))\"` and paste here"
+    "c2s_token": "REPLACE_ME: run `python3 -c 'import secrets; print(secrets.token_hex(32))'` and paste here",
+    "cors_origins": ["http://localhost:8001"]
   },
   "directories": {
     "inbox": "data/inbox",
-    "inbox_queue": "data/inbox/queue",
     "data_root": "data",
     "outbox": "data/outbox",
     "posts": "data/posts",

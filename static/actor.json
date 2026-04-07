@@ -1,13 +1,16 @@
 {
   "@context": "https://www.w3.org/ns/activitystreams",
   "type": "Person",
-  "id": "https://127.0.0.1:5000/activitypub/actor",
+  "id": "http://127.0.0.1:5000/activitypub/actor",
   "preferredUsername": "blog",
   "name": "localhost's blog",
   "summary": "A personal blog with federated posts",
-  "inbox": "https://127.0.0.1:5000/activitypub/inbox",
-  "outbox": "https://127.0.0.1:5000/activitypub/outbox",
-  "followers": "https://127.0.0.1:5000/activitypub/followers",
-  "following": "https://127.0.0.1:5000/activitypub/following",
-  "url": "https://127.0.0.1:5000"
+  "inbox": "http://127.0.0.1:5000/activitypub/inbox",
+  "outbox": "http://127.0.0.1:5000/activitypub/outbox",
+  "followers": "http://127.0.0.1:5000/activitypub/followers",
+  "following": "http://127.0.0.1:5000/activitypub/following",
+  "url": "http://127.0.0.1:5000",
+  "streams": [
+    "http://127.0.0.1:5000/activitypub/streams/posts"
+  ]
 }

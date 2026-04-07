@@ -114,7 +114,6 @@ class TestConfigMixin:
             },
             "directories": {
                 "inbox": f"{base_test_dir}/inbox",
-                "inbox_queue": f"{base_test_dir}/inbox/queue",
                 "data_root": f"{base_test_dir}",
                 "outbox": f"{base_test_dir}/outbox",
                 "posts": f"{base_test_dir}/posts",
@@ -171,23 +170,14 @@ class TestConfigMixin:
         return self.config
 
     def create_and_clean_directories(self):
-        """Create all configured directories and clean any existing files"""
+        """Remove data_root if it exists, then create all directories fresh"""
+        data_root = self.config['directories']['data_root']
+        if os.path.exists(data_root):
+            shutil.rmtree(data_root)
         for dir_path in self.config['directories'].values():
             os.makedirs(dir_path, exist_ok=True)
-            # Clean any existing files
-            if os.path.exists(dir_path):
-                for f in os.listdir(dir_path):
-                    file_path = os.path.join(dir_path, f)
-                    if os.path.islink(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isfile(file_path):
-                        os.remove(file_path)
-                    elif os.path.isdir(file_path):
-                        # Only remove if it's empty (avoid removing nested test dirs)
-                        try:
-                            os.rmdir(file_path)
-                        except OSError:
-                            pass  # Directory not empty, leave it
+        # Derived queue directory (not in config, lives inside inbox)
+        os.makedirs(os.path.join(self.config['directories']['inbox'], 'queue'), exist_ok=True)
 
     def teardown_test_environment(self):
         """Clean up test environment"""

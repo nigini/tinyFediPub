@@ -3,64 +3,19 @@
 Unit tests for Like activity processing
 """
 import unittest
-import tempfile
-import shutil
 import os
 import json
-import sys
 
 from tests.test_config import TestConfigMixin
 
 
-class TestLikeProcessor(unittest.TestCase):
+class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
     """Test Like activity processing functionality"""
 
     def setUp(self):
-        """Set up temporary directory with a test post for Like tests"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        sys.path.insert(0, self.original_cwd)
-
+        """Set up test environment with a test post for Like tests"""
+        self.setup_test_environment("like_processor")
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
-
-        self.config = {
-            "server": {
-                "domain": "test.example.com",
-                "protocol": "https",
-                "host": "0.0.0.0",
-                "port": 5000,
-                "debug": True
-            },
-            "activitypub": {
-                "username": "test",
-                "actor_name": "Test Actor",
-                "actor_summary": "A test actor",
-                "namespace": "activitypub",
-                "auto_accept_follow_requests": True
-            },
-            "security": {
-                "public_key_file": "test.pem",
-                "private_key_file": "test.pem"
-            },
-            "directories": {
-                "inbox": "static/tests/inbox",
-                "inbox_queue": "static/tests/inbox/queue",
-                "data_root": "static/tests",
-                "outbox": "static/tests/outbox",
-                "posts": "static/tests/posts",
-                "followers": "static/tests"
-            }
-        }
-        with open('config.json', 'w') as f:
-            json.dump(self.config, f)
-        with open('test.pem', 'w') as f:
-            f.write('test key')
-
-        # Create required directories
-        os.makedirs(self.config['directories']['inbox'], exist_ok=True)
-        os.makedirs(self.config['directories']['inbox_queue'], exist_ok=True)
-        os.makedirs(self.config['directories']['outbox'], exist_ok=True)
 
         # Create a test post with empty reaction collections (matches post template spec)
         post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
@@ -91,9 +46,7 @@ class TestLikeProcessor(unittest.TestCase):
             json.dump(empty_likes, f)
 
     def tearDown(self):
-        """Clean up temporary directory"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        self.teardown_test_environment()
 
     def test_like_activity_creates_likes_collection(self):
         """Test that a Like activity creates a likes.json for the post"""

@@ -107,7 +107,7 @@ setattr(_this_module, 'UndoActivityProcessor', UndoActivityProcessor)
 
 def ensure_queue_directory(config):
     """Ensure the queue directory exists"""
-    queue_dir = config['directories']['inbox_queue']
+    queue_dir = os.path.join(config['directories']['inbox'], 'queue')
     os.makedirs(queue_dir, exist_ok=True)
     return queue_dir
 

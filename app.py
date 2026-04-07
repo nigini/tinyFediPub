@@ -48,6 +48,17 @@ WEBSITE_URL = f'{PROTOCOL}://{DOMAIN}'
 NAMESPACE = config['activitypub']['namespace']
 CONTENT_TYPE_AP = 'application/activity+json'
 CONTENT_TYPE_LD = 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
+CORS_ORIGINS = config['security'].get('cors_origins', [])
+
+@app.after_request
+def add_cors_headers(response):
+    """Add CORS headers for configured origins (tinyHome browser access)"""
+    origin = request.headers.get('Origin')
+    if origin and origin in CORS_ORIGINS:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    return response
 
 def load_json_file(filename):
     """Load JSON data from data_root or followers directory"""
@@ -395,7 +406,7 @@ def save_inbox_activity(activity):
 
 def queue_activity_for_processing(filename):
     """Queue activity for processing by creating symlink in queue directory"""
-    queue_dir = config['directories']['inbox_queue']
+    queue_dir = os.path.join(config['directories']['inbox'], 'queue')
     inbox_dir = config['directories']['inbox']
 
     os.makedirs(queue_dir, exist_ok=True)

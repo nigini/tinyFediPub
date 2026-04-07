@@ -126,7 +126,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
         self.assertEqual(len(inbox_files), 1, "Follow activity should be saved in inbox")
 
         # Verify symlink was created in queue (app does this automatically)
-        queue_dir = self.config['directories']['inbox_queue']
+        queue_dir = os.path.join(self.config['directories']['inbox'], 'queue')
         queue_files = os.listdir(queue_dir)
         self.assertEqual(len(queue_files), 1, "Follow should be queued for processing")
 
@@ -237,7 +237,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
 
         # Verify Follow was queued (app does this automatically)
         inbox_dir = self.config['directories']['inbox']
-        queue_dir = self.config['directories']['inbox_queue']
+        queue_dir = os.path.join(self.config['directories']['inbox'], 'queue')
 
         with patch('activity_delivery.requests.get') as mock_get, \
              patch('activity_delivery.requests.post') as mock_post, \

@@ -3,66 +3,21 @@
 Unit tests for Follow activity processing
 """
 import unittest
-import tempfile
-import shutil
 import os
 import json
-import sys
 from unittest.mock import patch
 
 from tests.test_config import TestConfigMixin
 
 
-class TestFollowProcessor(unittest.TestCase):
+class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
     """Test Follow activity processing functionality"""
 
     def setUp(self):
-        """Set up temporary directory for test files"""
-        self.test_dir = tempfile.mkdtemp()
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-        sys.path.insert(0, self.original_cwd)
-
-        self.config = {
-            "server": {
-                "domain": "test.example.com",
-                "protocol": "https",
-                "host": "0.0.0.0",
-                "port": 5000,
-                "debug": True
-            },
-            "activitypub": {
-                "username": "test",
-                "actor_name": "Test Actor",
-                "actor_summary": "A test actor",
-                "namespace": "activitypub",
-                "auto_accept_follow_requests": True
-            },
-            "security": {
-                "public_key_file": "test.pem",
-                "private_key_file": "test.pem"
-            },
-            "directories": {
-                "inbox": "static/tests/inbox",
-                "inbox_queue": "static/tests/inbox/queue",
-                "data_root": "static/tests",
-                "outbox": "static/tests/outbox",
-                "posts": "static/tests/posts",
-                "followers": "static/tests"
-            }
-        }
-        with open('config.json', 'w') as f:
-            json.dump(self.config, f)
-        with open('test.pem', 'w') as f:
-            f.write('test key')
-
-        os.makedirs(self.config['directories']['inbox'], exist_ok=True)
-        os.makedirs(self.config['directories']['inbox_queue'], exist_ok=True)
-        os.makedirs(self.config['directories']['outbox'], exist_ok=True)
+        self.setup_test_environment("follow_processor")
 
     def tearDown(self):
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir)
+        self.teardown_test_environment()
 
     def test_follow_activity_processor(self):
         """Test Follow activity processing"""
