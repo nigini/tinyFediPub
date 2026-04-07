@@ -24,7 +24,7 @@ class TestActivityProcessor(unittest.TestCase, TestConfigMixin):
         """Test handling of unknown activity types"""
         from activity_processor import PROCESSORS
 
-        self.assertNotIn('Announce', PROCESSORS)
+        self.assertNotIn('Delete', PROCESSORS)
 
     def test_activity_processor_registry(self):
         """Test that the processor registry is properly configured"""
@@ -110,17 +110,17 @@ class TestActivityProcessor(unittest.TestCase, TestConfigMixin):
 
         processor = UndoActivityProcessor()
 
-        undo_announce = {
+        undo_delete = {
             "type": "Undo",
             "actor": "https://mastodon.social/users/alice",
             "object": {
-                "type": "Announce",
+                "type": "Delete",
                 "actor": "https://mastodon.social/users/alice",
                 "object": "https://test.example.com/activitypub/posts/123"
             }
         }
 
-        result = processor.process_inbox(undo_announce, "test-undo-announce.json", self.config)
+        result = processor.process_inbox(undo_delete, "test-undo-delete.json", self.config)
         self.assertTrue(result)  # Should succeed but be ignored
 
 

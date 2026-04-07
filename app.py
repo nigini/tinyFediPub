@@ -269,6 +269,28 @@ def post_likes(post_id):
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
+@app.route(f'/{NAMESPACE}/posts/<post_id>/shares')
+@require_activitypub_accept
+def post_shares(post_id):
+    """Shares collection for a post"""
+    from post_utils import get_post_path, load_config as load_post_config
+
+    post_path = get_post_path(post_id, load_post_config())
+
+    if not os.path.exists(post_path):
+        return jsonify({'error': 'Post not found'}), 404
+
+    shares_path = os.path.join(os.path.dirname(post_path), 'shares.json')
+    if not os.path.exists(shares_path):
+        return jsonify({'error': 'No shares collection'}), 404
+
+    with open(shares_path, 'r') as f:
+        shares_data = json.load(f)
+
+    response = jsonify(shares_data)
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
 @app.route(f'/{NAMESPACE}/activities/<activity_id>')
 @require_activitypub_accept
 def activity(activity_id):

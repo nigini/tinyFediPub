@@ -3,6 +3,7 @@ VENV
 .idea
 .*.un~
 __pycache__
+nohup.out
 
 # Security keys - never commit these
 keys/
