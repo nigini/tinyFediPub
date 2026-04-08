@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
+from post_utils import get_local_posts_dir
 
 C2S_TOKEN = 'test-outbox-token'
 
@@ -93,7 +94,7 @@ class TestC2SOutboxPost(unittest.TestCase, TestConfigMixin):
         })
 
         # One post directory with post.json + reaction files
-        posts_dir = self.config['directories']['posts']
+        posts_dir = get_local_posts_dir(self.config)
         post_dirs = [d for d in os.listdir(posts_dir)
                      if os.path.isdir(os.path.join(posts_dir, d))]
         self.assertEqual(len(post_dirs), 1)
@@ -119,7 +120,7 @@ class TestC2SOutboxPost(unittest.TestCase, TestConfigMixin):
             "url": "https://myblog.com/post-1"
         })
 
-        posts_dir = self.config['directories']['posts']
+        posts_dir = get_local_posts_dir(self.config)
         post_dirs = [d for d in os.listdir(posts_dir)
                      if os.path.isdir(os.path.join(posts_dir, d))]
         with open(os.path.join(posts_dir, post_dirs[0], 'post.json')) as f:
@@ -136,7 +137,7 @@ class TestC2SOutboxPost(unittest.TestCase, TestConfigMixin):
             "content": "<p>Hello</p>"
         })
 
-        posts_dir = self.config['directories']['posts']
+        posts_dir = get_local_posts_dir(self.config)
         post_dirs = [d for d in os.listdir(posts_dir)
                      if os.path.isdir(os.path.join(posts_dir, d))]
         with open(os.path.join(posts_dir, post_dirs[0], 'post.json')) as f:
@@ -152,7 +153,7 @@ class TestC2SOutboxPost(unittest.TestCase, TestConfigMixin):
             "content": "<p>Hello</p>"
         })
 
-        posts_dir = self.config['directories']['posts']
+        posts_dir = get_local_posts_dir(self.config)
         post_dirs = [d for d in os.listdir(posts_dir)
                      if os.path.isdir(os.path.join(posts_dir, d))]
         with open(os.path.join(posts_dir, post_dirs[0], 'post.json')) as f:

@@ -7,6 +7,7 @@ import os
 import json
 
 from tests.test_config import TestConfigMixin
+from post_utils import get_local_posts_dir
 
 
 class TestAnnounceRegistry(unittest.TestCase, TestConfigMixin):
@@ -37,7 +38,7 @@ class TestAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
         # Create a test post with empty reaction collections
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
@@ -85,7 +86,7 @@ class TestAnnounceProcessor(unittest.TestCase, TestConfigMixin):
 
         # Verify shares.json was updated
         shares_path = os.path.join(
-            self.config['directories']['posts'], self.post_uuid, 'shares.json'
+            get_local_posts_dir(self.config), self.post_uuid, 'shares.json'
         )
         self.assertTrue(os.path.exists(shares_path))
 
@@ -185,7 +186,7 @@ class TestAnnounceProcessor(unittest.TestCase, TestConfigMixin):
 
         processor.process_inbox(announce_activity, "announce-test.json", self.config)
 
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         with open(os.path.join(post_dir, 'post.json')) as f:
             post_data = json.load(f)
 
@@ -215,7 +216,7 @@ class TestAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(result2)
 
         shares_path = os.path.join(
-            self.config['directories']['posts'], self.post_uuid, 'shares.json'
+            get_local_posts_dir(self.config), self.post_uuid, 'shares.json'
         )
         with open(shares_path) as f:
             shares_data = json.load(f)
@@ -232,7 +233,7 @@ class TestUndoAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
         # Create a test post with two existing shares
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
@@ -282,7 +283,7 @@ class TestUndoAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         from activity_processor.announce import UndoAnnounceProcessor
 
         processor = UndoAnnounceProcessor()
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
 
         # Remove alice
         result = processor.process_inbox(
@@ -345,7 +346,7 @@ class TestUndoAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(result)
 
         # Alice and bob should still be there
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         with open(os.path.join(post_dir, 'shares.json')) as f:
             shares_data = json.load(f)
         self.assertEqual(shares_data['totalItems'], 2)
@@ -355,7 +356,7 @@ class TestUndoAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         from activity_processor.announce import UndoAnnounceProcessor
 
         # Remove the pre-populated shares.json
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.remove(os.path.join(post_dir, 'shares.json'))
 
         processor = UndoAnnounceProcessor()
@@ -410,7 +411,7 @@ class TestUndoAnnounceProcessor(unittest.TestCase, TestConfigMixin):
         )
         self.assertTrue(result)
 
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         with open(os.path.join(post_dir, 'shares.json')) as f:
             shares_data = json.load(f)
         self.assertEqual(shares_data['totalItems'], 1)
@@ -428,7 +429,7 @@ class TestSharesEndpoint(unittest.TestCase, TestConfigMixin):
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
         # Create a test post with one share
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
@@ -477,7 +478,7 @@ class TestSharesEndpoint(unittest.TestCase, TestConfigMixin):
     def test_shares_endpoint_no_shares_file(self):
         """Test that /posts/{uuid}/shares returns 404 when post exists but no shares.json"""
         # Remove shares.json but keep the post
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.remove(os.path.join(post_dir, 'shares.json'))
 
         response = self.client.get(

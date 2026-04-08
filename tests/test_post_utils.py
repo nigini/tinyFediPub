@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
+from post_utils import get_local_posts_dir
 
 
 class TestGenerateActivityId(unittest.TestCase):
@@ -79,7 +80,7 @@ class TestResolvePostUuid(unittest.TestCase, TestConfigMixin):
     def setUp(self):
         self.setup_test_environment("resolve_post_uuid")
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         test_post = {"type": "Article", "id": f"https://test.example.com/activitypub/posts/{self.post_uuid}"}
         with open(os.path.join(post_dir, 'post.json'), 'w') as f:

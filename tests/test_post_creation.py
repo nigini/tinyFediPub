@@ -11,7 +11,7 @@ sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
 from post_utils import (
     generate_post_id, create_post, create_activity,
-    get_actor_info, generate_activity_id
+    get_actor_info, generate_activity_id, get_local_posts_dir
 )
 
 class TestPostCreation(unittest.TestCase, TestConfigMixin):
@@ -63,10 +63,10 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
         
         # Check file was created in directory structure
-        self.assert_file_exists('posts', f'{post_id}/post.json')
+        post_path = os.path.join(get_local_posts_dir(self.config), post_id, 'post.json')
+        self.assertTrue(os.path.exists(post_path))
 
         # Verify file contents
-        post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
@@ -94,10 +94,10 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         self.assertEqual(post_obj['id'], f"https://test.example.com/activitypub/posts/{post_id}")
 
         # Check file was created in directory structure
-        self.assert_file_exists('posts', f'{post_id}/post.json')
+        post_path = os.path.join(get_local_posts_dir(self.config), post_id, 'post.json')
+        self.assertTrue(os.path.exists(post_path))
 
         # Verify file contents
-        post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
         with open(post_path, 'r') as f:
             saved_post = json.load(f)
         self.assertEqual(saved_post, post_obj)
@@ -148,7 +148,7 @@ class TestPostCreation(unittest.TestCase, TestConfigMixin):
         base_url = "https://test.example.com/activitypub/posts"
 
         for collection_name in ('likes', 'shares', 'replies'):
-            filepath = self.get_test_file_path('posts', f'{post_id}/{collection_name}.json')
+            filepath = os.path.join(get_local_posts_dir(self.config), post_id, f'{collection_name}.json')
             self.assertTrue(os.path.exists(filepath),
                             f"{collection_name}.json should exist in post directory")
 
@@ -235,7 +235,7 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
         activity_obj, activity_id = create_activity(post_obj, post_id)
 
         # Verify all files were created
-        self.assert_file_exists('posts', f'{post_id}/post.json')
+        self.assertTrue(os.path.exists(os.path.join(get_local_posts_dir(self.config), post_id, 'post.json')))
         self.assert_file_exists('outbox', f'{activity_id}.json')
 
     def test_cli_note_workflow(self):
@@ -249,11 +249,11 @@ class TestCLIIntegration(unittest.TestCase, TestConfigMixin):
         activity_obj, activity_id = create_activity(post_obj, post_id)
 
         # Verify all files were created
-        self.assert_file_exists('posts', f'{post_id}/post.json')
+        self.assertTrue(os.path.exists(os.path.join(get_local_posts_dir(self.config), post_id, 'post.json')))
         self.assert_file_exists('outbox', f'{activity_id}.json')
 
         # Verify post is a Note type
-        post_path = self.get_test_file_path('posts', f'{post_id}/post.json')
+        post_path = os.path.join(get_local_posts_dir(self.config), post_id, 'post.json')
         with open(post_path, 'r') as f:
             post = json.load(f)
         self.assertEqual(post['type'], 'Note')

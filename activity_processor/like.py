@@ -9,13 +9,13 @@ Handles:
 import json
 import os
 from activity_processor import BaseActivityProcessor
-from post_utils import generate_base_url, get_post_path, resolve_post_uuid_from_url
+from post_utils import generate_base_url, get_local_posts_dir, get_post_path, resolve_post_uuid_from_url
 from template_utils import templates
 
 
 def _get_likes_list(post_uuid, config):
     """Load the current likes list for a post, or return empty list."""
-    posts_dir = config['directories']['posts']
+    posts_dir = get_local_posts_dir(config)
     likes_path = os.path.join(posts_dir, post_uuid, 'likes.json')
 
     if os.path.exists(likes_path):
@@ -46,7 +46,7 @@ class LikeProcessor(BaseActivityProcessor):
             actors_list=likes_list
         )
 
-        posts_dir = config['directories']['posts']
+        posts_dir = get_local_posts_dir(config)
         likes_path = os.path.join(posts_dir, post_uuid, 'likes.json')
         with open(likes_path, 'w') as f:
             json.dump(likes_collection, f, indent=2)
@@ -125,7 +125,7 @@ class UndoLikeProcessor(BaseActivityProcessor):
             actors_list=likes_list
         )
 
-        posts_dir = config['directories']['posts']
+        posts_dir = get_local_posts_dir(config)
         likes_path = os.path.join(posts_dir, post_uuid, 'likes.json')
         with open(likes_path, 'w') as f:
             json.dump(likes_collection, f, indent=2)

@@ -9,13 +9,13 @@ Handles:
 import json
 import os
 from activity_processor import BaseActivityProcessor
-from post_utils import generate_base_url, get_post_path, resolve_post_uuid_from_url
+from post_utils import generate_base_url, get_local_posts_dir, get_post_path, resolve_post_uuid_from_url
 from template_utils import templates
 
 
 def _get_shares_list(post_uuid, config):
     """Load the current shares list for a post, or return empty list."""
-    posts_dir = config['directories']['posts']
+    posts_dir = get_local_posts_dir(config)
     shares_path = os.path.join(posts_dir, post_uuid, 'shares.json')
 
     if os.path.exists(shares_path):
@@ -43,7 +43,7 @@ class AnnounceProcessor(BaseActivityProcessor):
 
         shares_collection = templates.render_ordered_collection(shares_id, shares_list)
 
-        posts_dir = config['directories']['posts']
+        posts_dir = get_local_posts_dir(config)
         shares_path = os.path.join(posts_dir, post_uuid, 'shares.json')
         with open(shares_path, 'w') as f:
             json.dump(shares_collection, f, indent=2)
@@ -119,7 +119,7 @@ class UndoAnnounceProcessor(BaseActivityProcessor):
         shares_id = f"{base_url}/posts/{post_uuid}/shares"
         shares_collection = templates.render_ordered_collection(shares_id, shares_list)
 
-        posts_dir = config['directories']['posts']
+        posts_dir = get_local_posts_dir(config)
         shares_path = os.path.join(posts_dir, post_uuid, 'shares.json')
         with open(shares_path, 'w') as f:
             json.dump(shares_collection, f, indent=2)

@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
+from post_utils import get_local_posts_dir
 
 C2S_TOKEN = 'test-streams-token'
 
@@ -50,7 +51,7 @@ class TestStreamsPosts(unittest.TestCase, TestConfigMixin):
 
     def _create_test_post(self, uuid, title, content, likes_count=0):
         """Create a post directly on disk for testing"""
-        post_dir = os.path.join(self.config['directories']['posts'], uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), uuid)
         os.makedirs(post_dir, exist_ok=True)
         post = {
             "@context": "https://www.w3.org/ns/activitystreams",

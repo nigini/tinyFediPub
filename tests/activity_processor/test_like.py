@@ -7,6 +7,7 @@ import os
 import json
 
 from tests.test_config import TestConfigMixin
+from post_utils import get_local_posts_dir
 
 
 class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
@@ -18,7 +19,7 @@ class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
         # Create a test post with empty reaction collections (matches post template spec)
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
@@ -66,7 +67,7 @@ class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
 
         # Verify likes.json was created in the post directory
         likes_path = os.path.join(
-            self.config['directories']['posts'], self.post_uuid, 'likes.json'
+            get_local_posts_dir(self.config), self.post_uuid, 'likes.json'
         )
         self.assertTrue(os.path.exists(likes_path))
 
@@ -159,7 +160,7 @@ class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(result2)
 
         likes_path = os.path.join(
-            self.config['directories']['posts'], self.post_uuid, 'likes.json'
+            get_local_posts_dir(self.config), self.post_uuid, 'likes.json'
         )
         with open(likes_path) as f:
             likes_data = json.load(f)
@@ -190,7 +191,7 @@ class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
         processor.process_inbox(like_bob, "like-bob.json", self.config)
 
         likes_path = os.path.join(
-            self.config['directories']['posts'], self.post_uuid, 'likes.json'
+            get_local_posts_dir(self.config), self.post_uuid, 'likes.json'
         )
         with open(likes_path) as f:
             likes_data = json.load(f)
@@ -214,7 +215,7 @@ class TestLikeProcessor(unittest.TestCase, TestConfigMixin):
 
         processor.process_inbox(like_activity, "like-test.json", self.config)
 
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
 
         # post.json: likes summary should have updated totalItems
         with open(os.path.join(post_dir, 'post.json')) as f:
@@ -243,7 +244,7 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
         # Create a test post with one existing like (matches post template spec)
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
@@ -296,7 +297,7 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         )
         self.assertTrue(result)
 
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
 
         # likes.json should be empty collection (not deleted)
         likes_path = os.path.join(post_dir, 'likes.json')
@@ -323,7 +324,7 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         )
         self.assertTrue(result)
 
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
 
         # Alice's like should still be there
         with open(os.path.join(post_dir, 'likes.json')) as f:
@@ -356,7 +357,7 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         from activity_processor.like import UndoLikeProcessor
 
         # Remove the pre-populated likes.json
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.remove(os.path.join(post_dir, 'likes.json'))
 
         processor = UndoLikeProcessor()
@@ -377,7 +378,7 @@ class TestUndoLikeProcessor(unittest.TestCase, TestConfigMixin):
         )
         self.assertTrue(result)
 
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         with open(os.path.join(post_dir, 'likes.json')) as f:
             likes_data = json.load(f)
         self.assertEqual(likes_data['totalItems'], 0)
@@ -395,7 +396,7 @@ class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
         self.post_uuid = "550e8400-e29b-41d4-a716-446655440000"
 
         # Create a test post with one like
-        post_dir = os.path.join(self.config['directories']['posts'], self.post_uuid)
+        post_dir = os.path.join(get_local_posts_dir(self.config), self.post_uuid)
         os.makedirs(post_dir, exist_ok=True)
         post_base = f"https://test.example.com/activitypub/posts/{self.post_uuid}"
         test_post = {
@@ -423,7 +424,7 @@ class TestLikesEndpoint(unittest.TestCase, TestConfigMixin):
 
         # Create a second post with no likes (empty collection)
         self.post_uuid_no_likes = "660e8400-e29b-41d4-a716-446655440000"
-        post_dir_2 = os.path.join(self.config['directories']['posts'], self.post_uuid_no_likes)
+        post_dir_2 = os.path.join(get_local_posts_dir(self.config), self.post_uuid_no_likes)
         os.makedirs(post_dir_2, exist_ok=True)
         post_base_2 = f"https://test.example.com/activitypub/posts/{self.post_uuid_no_likes}"
         test_post_2 = {

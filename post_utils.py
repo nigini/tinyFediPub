@@ -33,19 +33,13 @@ def generate_post_id():
     """
     return str(uuid.uuid4())
 
+def get_local_posts_dir(config):
+    """Get the filesystem path to the local posts directory"""
+    return config['directories']['posts_local']
+
 def get_post_path(post_id, config):
-    """
-    Get the filesystem path to a post's JSON file
-
-    Args:
-        post_id: Post UUID
-        config: Configuration dictionary
-
-    Returns:
-        str: Path like 'static/posts/{uuid}/post.json'
-    """
-    posts_dir = config['directories']['posts']
-    return os.path.join(posts_dir, post_id, 'post.json')
+    """Get the filesystem path to a post's JSON file"""
+    return os.path.join(get_local_posts_dir(config), post_id, 'post.json')
 
 def resolve_post_uuid_from_url(object_url, config):
     """

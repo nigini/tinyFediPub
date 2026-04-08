@@ -375,7 +375,8 @@ def followers():
 @require_activitypub_accept
 def streams_posts():
     """Streams/posts endpoint - paginated collection of post objects (not activities)"""
-    posts_dir = config['directories']['posts']
+    from post_utils import get_local_posts_dir
+    posts_dir = get_local_posts_dir(config)
     os.makedirs(posts_dir, exist_ok=True)
     paths = list_json_files(os.path.join(posts_dir, '*/post.json'), sort_key='mtime')
     base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/streams/posts"
