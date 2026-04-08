@@ -325,6 +325,7 @@ def inbox():
         # Check for signature header
         signature_header = headers_dict.get('Signature')
         require_signatures = config['security'].get('require_http_signatures', False)
+        signed_by = None
 
         if signature_header:
             # Signature present - verify it
@@ -332,6 +333,10 @@ def inbox():
                 print("✗ Invalid signature - rejecting request")
                 return jsonify({'error': 'Invalid signature'}), 401
             print("✓ Signature verified")
+            # Extract signer identity for metadata
+            from http_signatures import parse_signature_header
+            sig_components = parse_signature_header(signature_header)
+            signed_by = sig_components.get('keyId')
         elif require_signatures:
             # No signature but required - reject
             print("⚠️  No signature and signatures required - rejecting request")
@@ -346,7 +351,7 @@ def inbox():
             return jsonify({'error': 'Invalid activity'}), 400
 
         # Save incoming activity to inbox folder
-        filename = save_inbox_activity(activity)
+        filename = save_inbox_activity(activity, signed_by=signed_by)
 
         # Queue activity for processing by creating symlink
         queue_activity_for_processing(filename)
@@ -403,8 +408,9 @@ def ensure_followers_file_exists():
             with open(filepath, 'w') as f:
                 json.dump(followers_collection, f, indent=2)
 
-def save_inbox_activity(activity):
-    """Save incoming activity to inbox folder"""
+def save_inbox_activity(activity, signed_by=None):
+    """Save incoming activity to inbox folder with sibling metadata file"""
+    from datetime import datetime, timezone
     from post_utils import generate_activity_id, parse_actor_url
 
     # Generate filename using utility functions
@@ -423,6 +429,15 @@ def save_inbox_activity(activity):
 
     with open(filepath, 'w') as f:
         json.dump(activity, f, indent=2)
+
+    # Save metadata alongside
+    meta_path = filepath.replace('.json', '.meta.json')
+    metadata = {
+        "signed_by": signed_by,
+        "received_at": datetime.now(timezone.utc).isoformat()
+    }
+    with open(meta_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
 
     print(f"✓ Saved inbox activity: {filepath}")
     return filename

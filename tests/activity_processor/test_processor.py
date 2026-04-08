@@ -147,7 +147,7 @@ class TestActivityQueueIntegration(unittest.TestCase, TestConfigMixin):
         queue_activity_for_processing(filename)
 
         inbox_dir = self.config['directories']['inbox']
-        inbox_files = [f for f in os.listdir(inbox_dir) if os.path.isfile(os.path.join(inbox_dir, f))]
+        inbox_files = [f for f in os.listdir(inbox_dir) if os.path.isfile(os.path.join(inbox_dir, f)) and not f.endswith('.meta.json')]
         self.assertEqual(len(inbox_files), 1)
         self.assertTrue(inbox_files[0].startswith('follow-'))
 

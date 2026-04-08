@@ -31,13 +31,12 @@ class TestInboxFunctionality(unittest.TestCase, TestConfigMixin):
             "id": "https://mastodon.social/activities/123"
         }
 
-        save_inbox_activity(follow_activity)
+        filename = save_inbox_activity(follow_activity)
 
-        # Check file was created with correct pattern
-        self.assert_file_count('inbox', 1)
+        # Check files were created (activity + metadata)
+        self.assert_file_count('inbox', 2)
 
-        # Get the single file and verify naming
-        filename = self.get_single_file_in_directory('inbox')
+        # Verify naming
         self.assertTrue(filename.startswith('follow-'))
         self.assertTrue(filename.endswith('-mastodon-social.json'))
 
@@ -52,10 +51,9 @@ class TestInboxFunctionality(unittest.TestCase, TestConfigMixin):
             "id": "https://pixelfed.social/activities/456"
         }
 
-        save_inbox_activity(undo_activity)
+        filename = save_inbox_activity(undo_activity)
 
-        self.assert_file_count('inbox', 1)
-        filename = self.get_single_file_in_directory('inbox')
+        self.assert_file_count('inbox', 2)
         self.assertTrue(filename.startswith('undo-'))
         self.assertTrue(filename.endswith('-pixelfed-social.json'))
 
@@ -69,12 +67,58 @@ class TestInboxFunctionality(unittest.TestCase, TestConfigMixin):
             "object": "https://example.com/posts/123"
         }
 
-        save_inbox_activity(bad_activity)
+        filename = save_inbox_activity(bad_activity)
 
-        self.assert_file_count('inbox', 1)
-        filename = self.get_single_file_in_directory('inbox')
+        self.assert_file_count('inbox', 2)
         self.assertTrue(filename.startswith('like-'))
         self.assertTrue(filename.endswith('-unknown.json'))
+
+
+    def test_save_activity_with_metadata(self):
+        """Test saving activity creates a sibling .meta.json with signed_by"""
+        from app import save_inbox_activity
+        import os
+
+        activity = {
+            "type": "Follow",
+            "actor": "https://mastodon.social/users/alice",
+            "object": "https://example.com/actor",
+            "id": "https://mastodon.social/activities/123"
+        }
+
+        filename = save_inbox_activity(activity, signed_by="https://mastodon.social/users/alice#main-key")
+
+        inbox_dir = self.config['directories']['inbox']
+        meta_path = os.path.join(inbox_dir, filename.replace('.json', '.meta.json'))
+        self.assertTrue(os.path.exists(meta_path))
+
+        with open(meta_path) as f:
+            metadata = json.load(f)
+
+        self.assertEqual(metadata['signed_by'], 'https://mastodon.social/users/alice#main-key')
+        self.assertIn('received_at', metadata)
+
+    def test_save_activity_without_signature(self):
+        """Test saving unsigned activity creates metadata with signed_by=None"""
+        from app import save_inbox_activity
+        import os
+
+        activity = {
+            "type": "Like",
+            "actor": "https://mastodon.social/users/alice",
+            "object": "https://example.com/posts/123"
+        }
+
+        filename = save_inbox_activity(activity)
+
+        inbox_dir = self.config['directories']['inbox']
+        meta_path = os.path.join(inbox_dir, filename.replace('.json', '.meta.json'))
+        self.assertTrue(os.path.exists(meta_path))
+
+        with open(meta_path) as f:
+            metadata = json.load(f)
+
+        self.assertIsNone(metadata['signed_by'])
 
 
 class TestInboxEndpoint(unittest.TestCase, TestConfigMixin):

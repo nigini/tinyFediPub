@@ -122,7 +122,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
 
         # Verify Follow was saved to inbox
         inbox_dir = self.config['directories']['inbox']
-        inbox_files = [f for f in os.listdir(inbox_dir) if f.startswith('follow-') and f.endswith('.json')]
+        inbox_files = [f for f in os.listdir(inbox_dir) if f.startswith('follow-') and f.endswith('.json') and not f.endswith('.meta.json')]
         self.assertEqual(len(inbox_files), 1, "Follow activity should be saved in inbox")
 
         # Verify symlink was created in queue (app does this automatically)

@@ -162,6 +162,10 @@ templates/
 - **HTTP Signature Verification** - Cryptographic validation of incoming activities (configurable)
 - **HTTP Signature Signing** - Sign outgoing activities for secure delivery
 - **Likes Collection** - Per-post likes tracking with collection endpoint at `/posts/{id}/likes`
+- **Shares Collection** - Per-post shares tracking with collection endpoint at `/posts/{id}/shares`
+- **Inbound Create** - Receive and store posts from trusted actors in `posts/remote/`, with pristine object storage and provenance metadata
+- **Trust Module** - Policy-based acceptance of incoming Create activities (block list, following, addressed to us, reply to known post, trusted signer)
+- **Inbox Provenance** - HTTP signature identity (`signed_by`) stored alongside inbox activities for trust evaluation
 - **C2S Bearer Token Auth** - Token-based authentication for client-to-server endpoints
 - **C2S Outbox POST** - Clients submit AS2 objects, server wraps in Create activity and delivers
 - **Streams/Posts** - Object-centric paginated collection of posts (not activities) with inline reaction summaries
@@ -172,18 +176,24 @@ templates/
 data/
 ├── actor.json           # Your actor profile (auto-generated)
 ├── followers.json       # Collection of followers (auto-generated)
-├── posts/               # Individual post objects (UUID directories)
-│   └── {uuid}/
-│       ├── post.json       # Post object with inline reaction summaries
-│       ├── likes.json      # OrderedCollection of actors who liked
-│       ├── shares.json     # OrderedCollection of actors who shared
-│       └── replies.json    # OrderedCollection of replies
+├── blocked.json         # Block list (actors and domains)
+├── posts/
+│   ├── local/           # Your authored post objects (UUID directories)
+│   │   └── {uuid}/
+│   │       ├── post.json       # Post object with inline reaction summaries
+│   │       ├── likes.json      # OrderedCollection of actors who liked
+│   │       ├── shares.json     # OrderedCollection of actors who shared
+│   │       └── replies.json    # OrderedCollection of replies
+│   └── remote/          # Received posts from followed actors (URL-derived paths)
+│       └── {domain}/{path}/
+│           ├── object.json     # Original AS2 object (untouched)
+│           └── metadata.json   # Provenance: signed_by, received_at, accepted_by_rule
 ├── outbox/              # Outgoing activity objects
 │   └── create-20250921-143022-123456.json
 └── inbox/               # Received activities from other servers
-    ├── follow-*.json    # Follow requests received
-    ├── undo-*.json      # Unfollow activities received
-    └── queue/           # Symlinks to activities awaiting processing
+    ├── follow-*.json        # Activity files (original, untouched)
+    ├── follow-*.meta.json   # Provenance metadata (signed_by, received_at)
+    └── queue/               # Symlinks to activities awaiting processing
 ```
 
 **Current Capabilities:**
@@ -196,6 +206,9 @@ data/
 - ✅ HTTP signature verification for incoming activities (configurable)
 - ✅ HTTP signature signing for all outgoing deliveries
 - ✅ Receive and track Like activities per post
+- ✅ Receive and track Announce (share) activities per post
+- ✅ Receive and store Create activities from trusted actors
+- ✅ Policy-based trust evaluation for incoming content (see `docs/ACCEPT_POST_POLICY.md`)
 
 **Configuration Options:**
 - `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
@@ -211,7 +224,7 @@ data/
 - **Per-follower delivery tracking** — Expand the queue to track delivery per-follower, enabling independent retries for failed deliveries
 
 **Activity Types:**
-- **Announce** — Per-post shares collection at `/posts/{id}/shares`, with `Undo(Announce)`. See [AP §5.8](https://www.w3.org/TR/activitypub/#shares)
+- **Announce outbound** — Send Announce activities to boost posts to followers
 - **Delete** — Tombstoning posts + federated Delete delivery. See [AP §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
 - **EmojiReact** — Rich reactions per [FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md)
 
@@ -219,7 +232,7 @@ data/
 - **Following** — Send Follow activities, maintain `following.json`, handle Accept/Reject
 - **Inbox materialization** — `streams/home` with objects from followed actors
 - **Microsyntax processing** — Server-side `@mention` / `#hashtag` / URL resolution on outbox POST
-- **Object Integrity Proofs** — Self-authenticating posts via [FEP-8fcf](https://codeberg.org/fediverse/fep), embedding cryptographic signatures in objects (like Nostr's `sig`)
+- **Object Integrity Proofs** — Self-authenticating posts via [FEP-8b32](https://codeberg.org/fediverse/fep/src/branch/main/fep/8b32/fep-8b32.md), embedding cryptographic signatures in objects (like Nostr's `sig`). HIGH PRIORITY: sign all posts from the start
 
 **Other:**
 - Proper logging system (replace `print()` with Python's `logging` module)
@@ -230,4 +243,5 @@ data/
 
 See `docs/` for detailed design documents:
 - `docs/CLIENT_CONTRACT.md` — What tinyFedi guarantees to clients (normalization, streams, auth)
+- `docs/ACCEPT_POST_POLICY.md` — How tinyFedi decides to accept/reject incoming Create activities (trust rules, forwarding, future trust graph)
 - `docs/AP_Federation/SignaturesFlows.md` — HTTP signature flows
