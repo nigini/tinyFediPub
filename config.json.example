@@ -27,6 +27,7 @@
     "data_root": "data",
     "outbox": "data/outbox",
     "posts_local": "data/posts/local",
+    "posts_remote": "data/posts/remote",
     "followers": "data"
   }
 }

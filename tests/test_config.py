@@ -117,6 +117,7 @@ class TestConfigMixin:
                 "data_root": f"{base_test_dir}",
                 "outbox": f"{base_test_dir}/outbox",
                 "posts_local": f"{base_test_dir}/posts/local",
+                "posts_remote": f"{base_test_dir}/posts/remote",
                 "followers": f"{base_test_dir}"
             }
         }

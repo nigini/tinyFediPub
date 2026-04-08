@@ -205,6 +205,7 @@ data/
 ## What's Next
 
 **Architecture:**
+- **Data access layer** — Centralize file-based data access (followers, following, blocked, posts) into a shared module, replacing scattered direct file I/O across processors and endpoints
 - **Outbox queue processing** — Move outbox delivery into the queue system so CLI tools just create + queue activities, and the processor handles delivery (with retry on failure)
 - **Integrate delivery into processors** — Move `activity_delivery.py` into the `activity_processor` module as `delivery.py`, since delivery is outbox processing
 - **Per-follower delivery tracking** — Expand the queue to track delivery per-follower, enabling independent retries for failed deliveries
