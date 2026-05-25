@@ -162,9 +162,9 @@ def deliver_to_followers(activity: dict, config: dict) -> Dict[str, bool]:
     Returns:
         dict: Map of actor_url -> success boolean
     """
-    from post_utils import get_followers_list
+    from data_access import follow as follow_store
 
-    followers = get_followers_list(config)
+    followers = follow_store.get_followers(config)
     if not followers:
         print("No followers to deliver to")
         return {}

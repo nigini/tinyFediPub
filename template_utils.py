@@ -186,28 +186,6 @@ class ActivityPubTemplates:
 
         return self.render_json_template('activities/update.json.j2', **template_data)
 
-    def render_followers_collection(self, followers_id, followers_list=None):
-        """
-        Render followers collection template
-
-        Args:
-            followers_id: Collection ID
-            followers_list: List of follower actor IDs (empty list if None)
-
-        Returns:
-            dict: Followers collection JSON object
-        """
-        if followers_list is None:
-            followers_list = []
-
-        template_data = {
-            'followers_id': followers_id,
-            'total_items': len(followers_list),
-            'followers': followers_list
-        }
-
-        return self.render_json_template('collections/followers.json.j2', **template_data)
-
     def render_ordered_collection(self, collection_id, items=None):
         """
         Render a generic OrderedCollection template

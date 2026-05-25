@@ -10,34 +10,12 @@ import json
 import os
 from datetime import datetime
 from activity_processor import BaseActivityProcessor
+from data_access import follow as follow_store
 from template_utils import templates
 
 
 class FollowProcessor(BaseActivityProcessor):
     """Process incoming Follow activities."""
-
-    def _add_follower(self, actor_url, config):
-        """Add follower to followers.json collection. Returns True if added, False if already exists."""
-        from post_utils import get_followers_list, generate_base_url
-        followers_list = get_followers_list(config)
-
-        if actor_url in followers_list:
-            return False
-
-        followers_list.append(actor_url)
-
-        base_url = generate_base_url(config)
-        followers_collection = templates.render_followers_collection(
-            followers_id=f"{base_url}/followers",
-            followers_list=followers_list
-        )
-
-        followers_dir = config['directories']['followers']
-        followers_path = os.path.join(followers_dir, 'followers.json')
-        with open(followers_path, 'w') as f:
-            json.dump(followers_collection, f, indent=2)
-
-        return True
 
     def _generate_accept_activity(self, original_follow, actor_url, config):
         """Generate Accept activity for the Follow request using template system"""
@@ -84,7 +62,7 @@ class FollowProcessor(BaseActivityProcessor):
             print(f"Processing Follow from {actor_url}")
 
             if config['activitypub'].get('auto_accept_follow_requests', True):
-                if self._add_follower(actor_url, config):
+                if follow_store.add_follower(actor_url, config):
                     print(f"Added {actor_url} to followers collection")
                 else:
                     print(f"Follower {actor_url} already exists")
@@ -105,29 +83,6 @@ class FollowProcessor(BaseActivityProcessor):
 class UndoFollowProcessor(BaseActivityProcessor):
     """Process incoming Undo Follow activities."""
 
-    def _remove_follower(self, actor_url, config):
-        """Remove follower from followers.json collection. Returns True if removed, False if not found."""
-        from post_utils import get_followers_list, generate_base_url
-        followers_list = get_followers_list(config)
-
-        if actor_url not in followers_list:
-            return False
-
-        followers_list.remove(actor_url)
-
-        base_url = generate_base_url(config)
-        followers_collection = templates.render_followers_collection(
-            followers_id=f"{base_url}/followers",
-            followers_list=followers_list
-        )
-
-        followers_dir = config['directories']['followers']
-        followers_path = os.path.join(followers_dir, 'followers.json')
-        with open(followers_path, 'w') as f:
-            json.dump(followers_collection, f, indent=2)
-
-        return True
-
     def process_inbox(self, activity, filename, config):
         """Process Undo Follow activity - remove follower"""
         try:
@@ -139,7 +94,7 @@ class UndoFollowProcessor(BaseActivityProcessor):
 
             print(f"Processing Undo Follow from {actor_url}")
 
-            if self._remove_follower(actor_url, config):
+            if follow_store.remove_follower(actor_url, config):
                 print(f"Removed {actor_url} from followers collection")
             else:
                 print(f"Follower {actor_url} was not found in collection")

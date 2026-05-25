@@ -81,33 +81,6 @@ def generate_base_url(config):
     namespace = config['activitypub']['namespace']
     return f"{protocol}://{domain}/{namespace}"
 
-def get_followers_list(config):
-    """
-    Get current followers list from followers.json
-
-    Args:
-        config: Configuration dictionary
-
-    Returns:
-        list: List of follower actor URLs
-    """
-    import json
-    import os
-
-    followers_dir = config['directories']['followers']
-    followers_path = os.path.join(followers_dir, 'followers.json')
-
-    # Ensure directory exists
-    os.makedirs(followers_dir, exist_ok=True)
-
-    # Load existing followers or return empty list
-    if os.path.exists(followers_path):
-        with open(followers_path, 'r') as f:
-            followers_data = json.load(f)
-        return followers_data.get('items', [])
-    else:
-        return []
-
 def generate_activity_id(activity_type):
     """
     Generate activity ID with timestamp + type

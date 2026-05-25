@@ -50,16 +50,16 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(accept_activity['id'].startswith('https://test.example.com/activitypub/activities/accept-'))
 
         # Verify follower was added
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         followers_file = os.path.join(followers_dir, 'followers.json')
         self.assertTrue(os.path.exists(followers_file), "followers.json should be created")
 
         with open(followers_file) as f:
             followers_data = json.load(f)
 
-        self.assertEqual(followers_data['type'], 'Collection')
+        self.assertEqual(followers_data['type'], 'OrderedCollection')
         self.assertEqual(followers_data['totalItems'], 1)
-        self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
+        self.assertIn('https://mastodon.social/users/alice', followers_data['orderedItems'])
 
     def test_duplicate_follow_processing(self):
         """Test that duplicate follows don't create duplicate followers"""
@@ -81,15 +81,15 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(result2)
 
         # Verify only one follower exists
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         followers_file = os.path.join(followers_dir, 'followers.json')
 
         with open(followers_file) as f:
             followers_data = json.load(f)
 
         self.assertEqual(followers_data['totalItems'], 1)
-        self.assertEqual(len(followers_data['items']), 1)
-        self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
+        self.assertEqual(len(followers_data['orderedItems']), 1)
+        self.assertIn('https://mastodon.social/users/alice', followers_data['orderedItems'])
 
         # Verify two Accept activities were created (one for each follow)
         activities_dir = self.config['directories']['outbox']
@@ -116,13 +116,13 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         self.assertTrue(result)
 
         # Verify NO follower was added when auto-accept is disabled
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         followers_file = os.path.join(followers_dir, 'followers.json')
 
         if os.path.exists(followers_file):
             with open(followers_file) as f:
                 followers_data = json.load(f)
-            self.assertNotIn('https://mastodon.social/users/bob', followers_data.get('items', []))
+            self.assertNotIn('https://mastodon.social/users/bob', followers_data.get('orderedItems', []))
 
         # Verify NO Accept activity was created
         activities_dir = self.config['directories']['outbox']
@@ -150,14 +150,14 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         processor = UndoFollowProcessor()
 
         # Set up existing follower
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         os.makedirs(followers_dir, exist_ok=True)
         followers_data = {
             "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Collection",
+            "type": "OrderedCollection",
             "id": "https://test.example.com/activitypub/followers",
             "totalItems": 1,
-            "items": ["https://mastodon.social/users/alice"]
+            "orderedItems": ["https://mastodon.social/users/alice"]
         }
         followers_file = os.path.join(followers_dir, 'followers.json')
         with open(followers_file, 'w') as f:
@@ -180,9 +180,9 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         with open(followers_file) as f:
             updated_followers_data = json.load(f)
 
-        self.assertEqual(updated_followers_data['type'], 'Collection')
+        self.assertEqual(updated_followers_data['type'], 'OrderedCollection')
         self.assertEqual(updated_followers_data['totalItems'], 0)
-        self.assertEqual(len(updated_followers_data['items']), 0)
+        self.assertEqual(len(updated_followers_data['orderedItems']), 0)
 
     def test_undo_follow_nonexistent_follower(self):
         """Test Undo Follow when follower doesn't exist"""
@@ -190,14 +190,14 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
 
         processor = UndoFollowProcessor()
 
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         os.makedirs(followers_dir, exist_ok=True)
         followers_data = {
             "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Collection",
+            "type": "OrderedCollection",
             "id": "https://test.example.com/activitypub/followers",
             "totalItems": 0,
-            "items": []
+            "orderedItems": []
         }
         followers_file = os.path.join(followers_dir, 'followers.json')
         with open(followers_file, 'w') as f:
@@ -221,7 +221,7 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
             updated_followers_data = json.load(f)
 
         self.assertEqual(updated_followers_data['totalItems'], 0)
-        self.assertEqual(len(updated_followers_data['items']), 0)
+        self.assertEqual(len(updated_followers_data['orderedItems']), 0)
 
     def test_undo_delegation_mechanism(self):
         """Test that UndoActivityProcessor properly delegates to specific processors"""
@@ -236,11 +236,11 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         }
         follow_processor.process_inbox(follow_activity, "test-follow.json", self.config)
 
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         followers_file = os.path.join(followers_dir, 'followers.json')
         with open(followers_file) as f:
             followers_data = json.load(f)
-        self.assertIn('https://mastodon.social/users/alice', followers_data['items'])
+        self.assertIn('https://mastodon.social/users/alice', followers_data['orderedItems'])
 
         undo_processor = UndoActivityProcessor()
         undo_activity = {
@@ -259,7 +259,7 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
 
         with open(followers_file) as f:
             followers_data = json.load(f)
-        self.assertNotIn('https://mastodon.social/users/alice', followers_data['items'])
+        self.assertNotIn('https://mastodon.social/users/alice', followers_data['orderedItems'])
         self.assertEqual(followers_data['totalItems'], 0)
 
 
@@ -300,22 +300,22 @@ class TestFollowersEndpointIntegration(unittest.TestCase, TestConfigMixin):
         )
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertEqual(data['type'], 'Collection')
+        self.assertEqual(data['type'], 'OrderedCollection')
         self.assertEqual(data['totalItems'], 1)
-        self.assertIn('https://mastodon.social/users/alice', data['items'])
+        self.assertIn('https://mastodon.social/users/alice', data['orderedItems'])
 
     def test_followers_endpoint_after_undo_follow(self):
         """Test that /followers reflects an UndoFollow removing a follower"""
         from activity_processor import UndoFollowProcessor
 
         # Pre-populate followers.json with an existing follower
-        followers_dir = self.config['directories']['followers']
+        followers_dir = self.config['directories']['data_root']
         followers_data = {
             "@context": "https://www.w3.org/ns/activitystreams",
-            "type": "Collection",
+            "type": "OrderedCollection",
             "id": "https://test.example.com/activitypub/followers",
             "totalItems": 1,
-            "items": ["https://mastodon.social/users/alice"]
+            "orderedItems": ["https://mastodon.social/users/alice"]
         }
         with open(os.path.join(followers_dir, 'followers.json'), 'w') as f:
             json.dump(followers_data, f)
@@ -340,7 +340,7 @@ class TestFollowersEndpointIntegration(unittest.TestCase, TestConfigMixin):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data['totalItems'], 0)
-        self.assertNotIn('https://mastodon.social/users/alice', data['items'])
+        self.assertNotIn('https://mastodon.social/users/alice', data['orderedItems'])
 
 
 if __name__ == '__main__':

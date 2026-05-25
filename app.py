@@ -2,6 +2,8 @@ from flask import Flask, jsonify, request
 import glob
 import json
 import os
+from data_access import follow as follow_store
+from post_utils import generate_base_url
 from template_utils import templates
 
 app = Flask(__name__)
@@ -61,13 +63,8 @@ def add_cors_headers(response):
     return response
 
 def load_json_file(filename):
-    """Load JSON data from data_root or followers directory"""
-    if filename == 'followers.json':
-        base_dir = config['directories']['followers']
-    else:
-        base_dir = config['directories']['data_root']
-
-    filepath = os.path.join(base_dir, filename)
+    """Load JSON data from the data root."""
+    filepath = os.path.join(config['directories']['data_root'], filename)
     with open(filepath, 'r') as f:
         return json.load(f)
 
@@ -369,9 +366,11 @@ def inbox():
 @require_activitypub_accept
 def followers():
     """Followers collection endpoint"""
-    ensure_followers_file_exists()
-
-    response = jsonify(load_json_file('followers.json'))
+    followers_list = follow_store.get_followers(config)
+    collection = templates.render_ordered_collection(
+        f"{generate_base_url(config)}/followers", followers_list
+    )
+    response = jsonify(collection)
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
@@ -389,24 +388,6 @@ def streams_posts():
     response = jsonify(paginate_collection(paths, base_url))
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
-
-def ensure_followers_file_exists():
-    """Create followers.json if it doesn't exist using template"""
-    import os
-    from post_utils import get_actor_info
-
-    followers_dir = config['directories']['followers']
-    filepath = os.path.join(followers_dir, 'followers.json')
-    if not os.path.exists(filepath):
-        actor = get_actor_info()
-        if actor:
-            base_url = actor['id'].rsplit('/actor', 1)[0]
-            followers_collection = templates.render_followers_collection(
-                followers_id=f"{base_url}/followers"
-            )
-            os.makedirs(followers_dir, exist_ok=True)
-            with open(filepath, 'w') as f:
-                json.dump(followers_collection, f, indent=2)
 
 def save_inbox_activity(activity, signed_by=None):
     """Save incoming activity to inbox folder with sibling metadata file"""

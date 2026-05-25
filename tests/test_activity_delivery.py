@@ -265,7 +265,7 @@ class TestDeliverToFollowers(TestConfigMixin, unittest.TestCase):
             "https://mastodon.social/users/bob"
         ]
 
-        with patch('post_utils.get_followers_list') as mock_followers, \
+        with patch('data_access.follow.get_followers') as mock_followers, \
              patch('activity_delivery.deliver_to_actor') as mock_deliver:
 
             mock_followers.return_value = followers
@@ -288,7 +288,7 @@ class TestDeliverToFollowers(TestConfigMixin, unittest.TestCase):
             "https://mastodon.social/users/charlie"
         ]
 
-        with patch('post_utils.get_followers_list') as mock_followers, \
+        with patch('data_access.follow.get_followers') as mock_followers, \
              patch('activity_delivery.deliver_to_actor') as mock_deliver:
 
             mock_followers.return_value = followers
@@ -306,7 +306,7 @@ class TestDeliverToFollowers(TestConfigMixin, unittest.TestCase):
 
     def test_deliver_to_followers_empty_list(self):
         """Test delivery with no followers"""
-        with patch('post_utils.get_followers_list') as mock_followers:
+        with patch('data_access.follow.get_followers') as mock_followers:
             mock_followers.return_value = []
 
             results = activity_delivery.deliver_to_followers(

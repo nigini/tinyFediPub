@@ -163,7 +163,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
 
         # Step 4: Verify Alice is in Bob's followers
         followers_file = os.path.join(
-            self.config['directories']['followers'],
+            self.config['directories']['data_root'],
             'followers.json'
         )
         self.assertTrue(os.path.exists(followers_file), "Followers file should exist")
@@ -171,10 +171,8 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
         with open(followers_file, 'r') as f:
             followers_data = json.load(f)
 
-        # Check for either 'items' or 'orderedItems' (both are valid in ActivityStreams)
-        items_key = 'items' if 'items' in followers_data else 'orderedItems'
-        self.assertIn(items_key, followers_data)
-        self.assertIn(alice_actor_url, followers_data[items_key])
+        self.assertEqual(followers_data['type'], 'OrderedCollection')
+        self.assertIn(alice_actor_url, followers_data['orderedItems'])
 
         # Step 5: Verify Accept activity was generated
         activities_dir = self.config['directories']['outbox']
@@ -258,14 +256,13 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
 
         # Verify Alice is in followers
         followers_file = os.path.join(
-            self.config['directories']['followers'],
+            self.config['directories']['data_root'],
             'followers.json'
         )
         with open(followers_file, 'r') as f:
             followers_data = json.load(f)
 
-        items_key = 'items' if 'items' in followers_data else 'orderedItems'
-        self.assertIn(alice_actor_url, followers_data[items_key])
+        self.assertIn(alice_actor_url, followers_data['orderedItems'])
 
         # Now send Undo Follow
         undo_activity = {

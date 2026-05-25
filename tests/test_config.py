@@ -77,7 +77,6 @@ class TestConfigMixin:
     - "outbox": For outbox activity files
     - "posts": For Note/Article objects
     - "outbox": For outbox activity files (Create/Accept/Update)
-    - "followers": For followers.json
     """
 
     def create_test_config(self, test_name="test", **overrides):
@@ -117,8 +116,7 @@ class TestConfigMixin:
                 "data_root": f"{base_test_dir}",
                 "outbox": f"{base_test_dir}/outbox",
                 "posts_local": f"{base_test_dir}/posts/local",
-                "posts_remote": f"{base_test_dir}/posts/remote",
-                "followers": f"{base_test_dir}"
+                "posts_remote": f"{base_test_dir}/posts/remote"
             }
         }
 
