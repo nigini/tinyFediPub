@@ -159,7 +159,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
             mock_post.return_value = mock_delivery_response
 
             # Run activity processor
-            activity_processor.process_queue(self.config)
+            activity_processor.process_inbox_queue(self.config)
 
         # Step 4: Verify Alice is in Bob's followers
         followers_file = os.path.join(
@@ -252,7 +252,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
             mock_sign.return_value = "fake_signature_string"
             mock_post.return_value = MagicMock(raise_for_status=MagicMock())
 
-            activity_processor.process_queue(self.config)
+            activity_processor.process_inbox_queue(self.config)
 
         # Verify Alice is in followers
         followers_file = os.path.join(
@@ -281,7 +281,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
 
         # Undo is automatically queued by the app
 
-        activity_processor.process_queue(self.config)
+        activity_processor.process_inbox_queue(self.config)
 
         # Verify Alice is no longer in followers
         with open(followers_file, 'r') as f:

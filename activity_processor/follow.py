@@ -4,6 +4,7 @@ Follow activity processors
 Handles:
 - Incoming Follow: add follower, generate and deliver Accept
 - Incoming Undo Follow: remove follower
+- Outgoing Follow: deliver to target inbox, register as pending until Accept
 """
 
 import json
@@ -50,6 +51,30 @@ class FollowProcessor(BaseActivityProcessor):
             print(f"✗ Failed to deliver Accept activity to {actor_url}")
 
         return accept_activity
+
+    def process_outbox(self, activity, filename, config):
+        """Deliver an outgoing Follow and register it as pending acceptance."""
+        try:
+            target = activity.get('object')
+            if isinstance(target, dict):
+                target = target.get('id')
+            if not target:
+                print(f"Outbound Follow missing target: {filename}")
+                return False
+
+            import activity_delivery
+            if not activity_delivery.deliver_to_actor(activity, target, config):
+                print(f"✗ Failed to deliver Follow to {target}")
+                return False
+
+            activity_id = filename.removesuffix('.json')
+            follow_store.add_pending_follow(activity_id, config)
+            print(f"✓ Delivered Follow to {target}; awaiting Accept")
+            return True
+
+        except Exception as e:
+            print(f"Error processing outbound Follow {filename}: {e}")
+            return False
 
     def process_inbox(self, activity, filename, config):
         """Process Follow activity - auto-accept and add to followers"""

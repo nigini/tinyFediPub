@@ -30,15 +30,8 @@ def is_blocked(actor_url, domain, config):
 
 def is_following(actor_url, config):
     """Are we following this actor?"""
-    following_path = os.path.join(config['directories']['data_root'], 'following.json')
-
-    if not os.path.exists(following_path):
-        return False
-
-    with open(following_path, 'r') as f:
-        following = json.load(f)
-
-    return actor_url in following.get('items', [])
+    from data_access.follow import get_following
+    return actor_url in get_following(config)
 
 
 def is_addressed_to_us(activity, our_actor):

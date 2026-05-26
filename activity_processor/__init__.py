@@ -34,6 +34,9 @@ class BaseActivityProcessor(ABC):
         raise NotImplementedError(f"{self.__class__.__name__} does not handle outbox activities")
 
 
+COMPOUND_PREFIXES = ('Undo', 'Accept', 'Reject')
+
+
 def _discover_processors():
     """Auto-discover processor classes from files in this package.
 
@@ -43,6 +46,10 @@ def _discover_processors():
     Naming convention:
       - FollowProcessor       -> 'Follow'
       - UndoFollowProcessor   -> 'Undo.Follow'
+      - AcceptFollowProcessor -> 'Accept.Follow'
+
+    Compound activity types (Undo/Accept/Reject) get split into <prefix>.<innertype>
+    keys so a generic dispatcher (e.g. UndoActivityProcessor) can route to them.
     """
     registry = {}
     package_dir = os.path.dirname(__file__)
@@ -57,8 +64,10 @@ def _discover_processors():
                     and issubclass(attr, BaseActivityProcessor)
                     and attr is not BaseActivityProcessor):
                 key = attr_name.replace('Processor', '')
-                if key.startswith('Undo') and len(key) > 4:
-                    key = f"Undo.{key[4:]}"
+                for prefix in COMPOUND_PREFIXES:
+                    if key.startswith(prefix) and len(key) > len(prefix):
+                        key = f"{prefix}.{key[len(prefix):]}"
+                        break
                 registry[key] = attr()
 
     return registry
@@ -105,34 +114,59 @@ PROCESSORS['Undo'] = UndoActivityProcessor()
 setattr(_this_module, 'UndoActivityProcessor', UndoActivityProcessor)
 
 
-def ensure_queue_directory(config):
-    """Ensure the queue directory exists"""
+def ensure_inbox_queue_directory(config):
+    """Ensure the inbox queue directory exists."""
     queue_dir = os.path.join(config['directories']['inbox'], 'queue')
     os.makedirs(queue_dir, exist_ok=True)
     return queue_dir
 
 
-def process_queue(config):
-    """Process all queued activities"""
-    queue_dir = ensure_queue_directory(config)
+def ensure_outbox_queue_directory(config):
+    """Ensure the outbox queue directory exists."""
+    queue_dir = os.path.join(config['directories']['outbox'], 'queue')
+    os.makedirs(queue_dir, exist_ok=True)
+    return queue_dir
 
+
+def _queue_activity(source_dir, filename):
+    """Symlink <source_dir>/queue/<filename> -> <source_dir>/<filename>."""
+    queue_dir = os.path.join(source_dir, 'queue')
+    os.makedirs(queue_dir, exist_ok=True)
+    source_path = os.path.join(source_dir, filename)
+    queue_path = os.path.join(queue_dir, filename)
+    if not os.path.lexists(queue_path):
+        os.symlink(os.path.abspath(source_path), queue_path)
+        print(f"✓ Queued activity for processing: {filename}")
+
+
+def queue_inbox_activity(filename, config):
+    """Queue an inbox activity for processing."""
+    _queue_activity(config['directories']['inbox'], filename)
+
+
+def queue_outbox_activity(filename, config):
+    """Queue an outbox activity for processing (delivery + side-effects)."""
+    _queue_activity(config['directories']['outbox'], filename)
+
+
+def _process_queue(queue_dir, dispatch_method, label, config):
+    """Walk queue_dir; dispatch each activity to processor.<dispatch_method>."""
     if not os.path.exists(queue_dir):
-        print("No queue directory found")
+        print(f"No {label} queue directory found")
         return
 
     queue_files = os.listdir(queue_dir)
     if not queue_files:
-        print("No activities to process")
+        print(f"No {label} activities to process")
         return
 
-    print(f"Processing {len(queue_files)} queued activities...")
+    print(f"Processing {len(queue_files)} queued {label} activities...")
 
     processed_count = 0
     failed_count = 0
 
     for filename in queue_files:
         filepath = os.path.join(queue_dir, filename)
-
         try:
             real_filepath = os.path.realpath(filepath)
             with open(real_filepath) as f:
@@ -143,7 +177,13 @@ def process_queue(config):
 
             if processor:
                 print(f"Processing {activity_type} activity: {filename}")
-                success = processor.process_inbox(activity, filename, config)
+                try:
+                    method = getattr(processor, dispatch_method)
+                    success = method(activity, filename, config)
+                except NotImplementedError:
+                    print(f"Processor for {activity_type} does not handle {label} activities")
+                    failed_count += 1
+                    continue
 
                 if success:
                     os.unlink(filepath)
@@ -160,4 +200,16 @@ def process_queue(config):
             print(f"Error loading activity {filename}: {e}")
             failed_count += 1
 
-    print(f"\nProcessing complete: {processed_count} processed, {failed_count} failed")
+    print(f"\n{label.capitalize()} processing complete: {processed_count} processed, {failed_count} failed")
+
+
+def process_inbox_queue(config):
+    """Process all queued inbox activities."""
+    queue_dir = ensure_inbox_queue_directory(config)
+    _process_queue(queue_dir, 'process_inbox', 'inbox', config)
+
+
+def process_outbox_queue(config):
+    """Process all queued outbox activities."""
+    queue_dir = ensure_outbox_queue_directory(config)
+    _process_queue(queue_dir, 'process_outbox', 'outbox', config)

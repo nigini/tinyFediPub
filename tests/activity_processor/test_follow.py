@@ -263,6 +263,78 @@ class TestFollowProcessor(unittest.TestCase, TestConfigMixin):
         self.assertEqual(followers_data['totalItems'], 0)
 
 
+class TestFollowProcessorOutbound(unittest.TestCase, TestConfigMixin):
+    """FollowProcessor.process_outbox: deliver + register as pending."""
+
+    def setUp(self):
+        self.setup_test_environment("follow_processor_outbound")
+
+    def tearDown(self):
+        self.teardown_test_environment()
+
+    def _write_follow_to_outbox(self, activity_id, target_actor):
+        outbox = self.config['directories']['outbox']
+        activity = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Follow",
+            "id": f"https://test.example.com/activitypub/activities/{activity_id}",
+            "actor": "https://test.example.com/activitypub/actor",
+            "object": target_actor,
+        }
+        with open(os.path.join(outbox, f"{activity_id}.json"), 'w') as f:
+            json.dump(activity, f)
+        return activity
+
+    def test_process_outbox_delivers_and_registers_pending(self):
+        from activity_processor import FollowProcessor
+        from data_access.follow import is_pending
+
+        activity = self._write_follow_to_outbox("follow-aaa", "https://example.com/alice")
+
+        with patch('activity_delivery.deliver_to_actor', return_value=True) as mock_deliver:
+            result = FollowProcessor().process_outbox(activity, "follow-aaa.json", self.config)
+
+        self.assertTrue(result)
+        mock_deliver.assert_called_once()
+        self.assertEqual(mock_deliver.call_args.args[1], "https://example.com/alice")
+        self.assertTrue(is_pending("follow-aaa", self.config))
+
+    def test_process_outbox_delivery_failure_leaves_no_pending(self):
+        from activity_processor import FollowProcessor
+        from data_access.follow import is_pending
+
+        activity = self._write_follow_to_outbox("follow-bbb", "https://example.com/bob")
+
+        with patch('activity_delivery.deliver_to_actor', return_value=False):
+            result = FollowProcessor().process_outbox(activity, "follow-bbb.json", self.config)
+
+        self.assertFalse(result)
+        self.assertFalse(is_pending("follow-bbb", self.config))
+
+    def test_process_outbox_handles_embedded_target_object(self):
+        from activity_processor import FollowProcessor
+        from data_access.follow import is_pending
+
+        activity = self._write_follow_to_outbox(
+            "follow-ccc",
+            {"id": "https://example.com/carol", "type": "Person"}
+        )
+
+        with patch('activity_delivery.deliver_to_actor', return_value=True) as mock_deliver:
+            result = FollowProcessor().process_outbox(activity, "follow-ccc.json", self.config)
+
+        self.assertTrue(result)
+        self.assertEqual(mock_deliver.call_args.args[1], "https://example.com/carol")
+        self.assertTrue(is_pending("follow-ccc", self.config))
+
+    def test_process_outbox_missing_target_returns_false(self):
+        from activity_processor import FollowProcessor
+
+        bad_activity = {"type": "Follow", "actor": "https://test.example.com/activitypub/actor"}
+        result = FollowProcessor().process_outbox(bad_activity, "follow-bad.json", self.config)
+        self.assertFalse(result)
+
+
 class TestFollowersEndpointIntegration(unittest.TestCase, TestConfigMixin):
     """Integration test: followers endpoint reflects processed Follow activities"""
 

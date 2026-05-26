@@ -78,13 +78,22 @@ Edit existing posts:
 ```
 **Note:** Updated posts are automatically delivered to followers when edited.
 
-Process incoming activities: 
+Follow a remote actor:
 
 ```bash
-python -m activity_processor` #or set up as a cron job
+./client/follow.py --actor "https://mastodon.social/users/alice"
 ```
-**Note:** Activities received in the inbox are automatically queued to be 
-processed! 
+**Note:** The Follow is queued in the outbox and delivered by the activity
+processor. The actor is added to your `following.json` only once their server
+sends back an Accept.
+
+Process queued activities (inbox + outbox):
+
+```bash
+python -m activity_processor  # or set up as a cron job
+```
+**Note:** Activities received in the inbox AND outgoing activities placed in
+the outbox queue (e.g., follows) are both processed by this single command.
 
 
 ## Deployment
@@ -149,6 +158,45 @@ templates/
 - **Configurable** - All values injected from `config.json` and runtime data
 
 
+## Activity Processing
+
+Incoming and outgoing activities flow through pluggable processors
+auto-discovered from files under `activity_processor/`:
+
+```
+activity_processor/
+├── follow.py        # FollowProcessor (inbound + outbound) + UndoFollowProcessor
+├── accept.py        # AcceptProcessor (dispatcher) + AcceptFollowProcessor
+├── create.py        # CreateProcessor (inbound)
+├── like.py          # LikeProcessor + UndoLikeProcessor
+└── announce.py      # AnnounceProcessor + UndoAnnounceProcessor
+```
+
+**Registry convention.** Each module defines one or more `XxxProcessor` classes
+inheriting from `BaseActivityProcessor`. The class name maps to a registry key
+by stripping `Processor`:
+
+- `FollowProcessor` → `Follow`
+- `UndoFollowProcessor` → `Undo.Follow`
+- `AcceptFollowProcessor` → `Accept.Follow`
+
+Compound activity types (`Undo`, `Accept`, `Reject`) get auto-split into
+`<prefix>.<innertype>` keys via the `COMPOUND_PREFIXES` tuple in
+`activity_processor/__init__.py`. Generic dispatcher classes
+(`UndoActivityProcessor`, `AcceptProcessor`) inspect the inner object's type
+and delegate to the matching `<prefix>.<innertype>` processor.
+
+**Direction.** Each processor may implement `process_inbox(activity, filename, config)`
+for incoming activities and/or `process_outbox(activity, filename, config)` for
+outgoing ones. The queue dispatcher catches `NotImplementedError` and skips
+unsupported directions gracefully.
+
+**Queues.** `data/inbox/queue/` and `data/outbox/queue/` are symlink farms
+pointing at activities awaiting processing. Inbox activities are queued by the
+HTTP webhook; outbox activities are queued by CLI tools (e.g.,
+`client/follow.py`). Running `python -m activity_processor` walks both queues
+and dispatches to the matching processor.
+
 ## Federation Features
 
 **Implemented:**
@@ -170,30 +218,40 @@ templates/
 - **C2S Outbox POST** - Clients submit AS2 objects, server wraps in Create activity and delivers
 - **Streams/Posts** - Object-centric paginated collection of posts (not activities) with inline reaction summaries
 - **Actor Streams Discovery** - Actor profile includes `streams` array for client discovery
+- **Outbound Follow** - Send Follow activities to remote actors via `client/follow.py`, queued and delivered by the activity processor
+- **Inbound Accept(Follow)** - Match incoming Accepts against pending Follows (by activity ID, with actor-pair fallback) and move the target into the following collection
+- **Pending Follows Tracking** - Symlinks in `following_pending/` reference the sent Follow activity in the outbox until Accept arrives
+- **Outbox Queue Processing** - Symmetric `outbox/queue/` mirrors the inbox queue: CLI tools enqueue, `python -m activity_processor` delivers
+- **Data Access Layer** - `data_access/follow.py` provides storage-agnostic primitives for follower / following / pending state (foundation for swapping the file backend later)
 
 **File Structure:**
 ```
 data/
-├── actor.json           # Your actor profile (auto-generated)
-├── followers.json       # Collection of followers (auto-generated)
-├── blocked.json         # Block list (actors and domains)
+├── actor.json              # Your actor profile (auto-generated)
+├── followers.json          # OrderedCollection of accepted followers
+├── following.json          # OrderedCollection of accepted follows (we follow them)
+├── following_pending/      # Symlinks -> outbox/<follow-id>.json for follows
+│                           #   awaiting Accept
+├── blocked.json            # Block list (actors and domains)
 ├── posts/
-│   ├── local/           # Your authored post objects (UUID directories)
+│   ├── local/              # Your authored post objects (UUID directories)
 │   │   └── {uuid}/
 │   │       ├── post.json       # Post object with inline reaction summaries
 │   │       ├── likes.json      # OrderedCollection of actors who liked
 │   │       ├── shares.json     # OrderedCollection of actors who shared
 │   │       └── replies.json    # OrderedCollection of replies
-│   └── remote/          # Received posts from followed actors (URL-derived paths)
+│   └── remote/             # Received posts from followed actors (URL-derived paths)
 │       └── {domain}/{path}/
 │           ├── object.json     # Original AS2 object (untouched)
 │           └── metadata.json   # Provenance: signed_by, received_at, accepted_by_rule
-├── outbox/              # Outgoing activity objects
-│   └── create-20250921-143022-123456.json
-└── inbox/               # Received activities from other servers
-    ├── follow-*.json        # Activity files (original, untouched)
-    ├── follow-*.meta.json   # Provenance metadata (signed_by, received_at)
-    └── queue/               # Symlinks to activities awaiting processing
+├── outbox/                 # Outgoing activity objects
+│   ├── create-20250921-143022-123456.json
+│   ├── follow-20260525-120000-000000.json
+│   └── queue/              # Symlinks to outbox activities awaiting delivery
+└── inbox/                  # Received activities from other servers
+    ├── follow-*.json           # Activity files (original, untouched)
+    ├── follow-*.meta.json      # Provenance metadata (signed_by, received_at)
+    └── queue/                  # Symlinks to inbox activities awaiting processing
 ```
 
 **Current Capabilities:**
@@ -209,6 +267,8 @@ data/
 - ✅ Receive and track Announce (share) activities per post
 - ✅ Receive and store Create activities from trusted actors
 - ✅ Policy-based trust evaluation for incoming content (see `docs/ACCEPT_POST_POLICY.md`)
+- ✅ Send Follow activities to remote actors (CLI: `./client/follow.py --actor <url>`)
+- ✅ Process Accept(Follow) activities and add accepted targets to the following collection
 
 **Configuration Options:**
 - `auto_accept_follow_requests` - Automatically accept follow requests (default: true). Set to `false` for manual approval of followers
@@ -218,18 +278,19 @@ data/
 ## What's Next
 
 **Architecture:**
-- **Data access layer** — Centralize file-based data access (followers, following, blocked, posts) into a shared module, replacing scattered direct file I/O across processors and endpoints
-- **Outbox queue processing** — Move outbox delivery into the queue system so CLI tools just create + queue activities, and the processor handles delivery (with retry on failure)
+- **Data access layer** — Extend the storage-agnostic API beyond `data_access/follow.py` to cover blocked, posts, inbox provenance, etc., replacing the remaining direct file I/O in processors and endpoints
 - **Integrate delivery into processors** — Move `activity_delivery.py` into the `activity_processor` module as `delivery.py`, since delivery is outbox processing
 - **Per-follower delivery tracking** — Expand the queue to track delivery per-follower, enabling independent retries for failed deliveries
+- **Migrate `new_post.py` to the outbox queue** — `client/new_post.py` still delivers synchronously; switch it to the same queue + processor flow used by `client/follow.py`
 
 **Activity Types:**
+- **Reject(Follow) inbound** — Handle remote Rejects of our pending Follow requests (currently a Reject would not match any handler)
+- **Undo(Follow) outbound** — Send an Undo to stop following an actor, remove them from `following.json`
 - **Announce outbound** — Send Announce activities to boost posts to followers
 - **Delete** — Tombstoning posts + federated Delete delivery. See [AP §6.11](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
 - **EmojiReact** — Rich reactions per [FEP-c0e0](https://codeberg.org/fediverse/fep/src/branch/main/fep/c0e0/fep-c0e0.md)
 
 **Client-to-Server:**
-- **Following** — Send Follow activities, maintain `following.json`, handle Accept/Reject
 - **Inbox materialization** — `streams/home` with objects from followed actors
 - **Microsyntax processing** — Server-side `@mention` / `#hashtag` / URL resolution on outbox POST
 - **Object Integrity Proofs** — Self-authenticating posts via [FEP-8b32](https://codeberg.org/fediverse/fep/src/branch/main/fep/8b32/fep-8b32.md), embedding cryptographic signatures in objects (like Nostr's `sig`). HIGH PRIORITY: sign all posts from the start

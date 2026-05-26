@@ -40,27 +40,96 @@ class TestActivityProcessor(unittest.TestCase, TestConfigMixin):
 
     def test_queue_directory_creation(self):
         """Test that queue directory is created properly"""
-        from activity_processor import ensure_queue_directory
+        from activity_processor import ensure_inbox_queue_directory
 
         queue_dir = os.path.join(self.config['directories']['inbox'], 'queue')
         if os.path.exists(queue_dir):
             shutil.rmtree(queue_dir)
 
-        result_dir = ensure_queue_directory(self.config)
+        result_dir = ensure_inbox_queue_directory(self.config)
+        self.assertTrue(os.path.exists(result_dir))
+
+    def test_outbox_queue_directory_creation(self):
+        """Outbox queue directory is created on demand."""
+        from activity_processor import ensure_outbox_queue_directory
+
+        queue_dir = os.path.join(self.config['directories']['outbox'], 'queue')
+        if os.path.exists(queue_dir):
+            shutil.rmtree(queue_dir)
+
+        result_dir = ensure_outbox_queue_directory(self.config)
         self.assertTrue(os.path.exists(result_dir))
         self.assertEqual(result_dir, queue_dir)
 
-    def test_main_processor_empty_queue(self):
-        """Test main processor with empty queue"""
-        from activity_processor import process_queue
+    def test_queue_outbox_activity_creates_symlink(self):
+        """queue_outbox_activity creates a queue symlink to the outbox file."""
+        from activity_processor import queue_outbox_activity
+
+        outbox_dir = self.config['directories']['outbox']
+        activity_file = os.path.join(outbox_dir, 'follow-test.json')
+        with open(activity_file, 'w') as f:
+            json.dump({"type": "Follow"}, f)
+
+        queue_outbox_activity('follow-test.json', self.config)
+
+        queue_path = os.path.join(outbox_dir, 'queue', 'follow-test.json')
+        self.assertTrue(os.path.islink(queue_path))
+        self.assertEqual(os.path.realpath(queue_path), os.path.abspath(activity_file))
+
+    def test_queue_outbox_activity_is_idempotent(self):
+        """Re-queueing the same outbox activity is a no-op."""
+        from activity_processor import queue_outbox_activity
+
+        outbox_dir = self.config['directories']['outbox']
+        activity_file = os.path.join(outbox_dir, 'follow-test.json')
+        with open(activity_file, 'w') as f:
+            json.dump({"type": "Follow"}, f)
+
+        queue_outbox_activity('follow-test.json', self.config)
+        queue_outbox_activity('follow-test.json', self.config)  # second call
+
+        queue_dir = os.path.join(outbox_dir, 'queue')
+        self.assertEqual(os.listdir(queue_dir), ['follow-test.json'])
+
+    def test_process_outbox_queue_empty(self):
+        """process_outbox_queue on an empty queue prints the outbox-specific message."""
+        from activity_processor import process_outbox_queue
 
         with patch('builtins.print') as mock_print:
-            process_queue(self.config)
-            mock_print.assert_called_with("No activities to process")
+            process_outbox_queue(self.config)
+            mock_print.assert_called_with("No outbox activities to process")
+
+    def test_process_outbox_queue_skips_processor_without_outbound_support(self):
+        """Outbox-queued activity of a type whose processor lacks process_outbox is reported as failed, not crashed."""
+        from activity_processor import process_outbox_queue, queue_outbox_activity
+
+        # Create processor only implements process_inbox in this slice
+        outbox_dir = self.config['directories']['outbox']
+        activity_file = os.path.join(outbox_dir, 'create-test.json')
+        with open(activity_file, 'w') as f:
+            json.dump({"type": "Create", "actor": "x", "object": {}}, f)
+        queue_outbox_activity('create-test.json', self.config)
+
+        with patch('builtins.print') as mock_print:
+            process_outbox_queue(self.config)
+            call_args = [c.args[0] for c in mock_print.call_args_list]
+            self.assertTrue(any('does not handle outbox' in arg for arg in call_args))
+
+        # symlink stays because dispatch failed
+        queue_path = os.path.join(outbox_dir, 'queue', 'create-test.json')
+        self.assertTrue(os.path.lexists(queue_path))
+
+    def test_main_processor_empty_queue(self):
+        """Test main processor with empty queue"""
+        from activity_processor import process_inbox_queue
+
+        with patch('builtins.print') as mock_print:
+            process_inbox_queue(self.config)
+            mock_print.assert_called_with("No inbox activities to process")
 
     def test_main_processor_with_activities(self):
         """Test main processor with queued activities"""
-        from activity_processor import process_queue
+        from activity_processor import process_inbox_queue
 
         follow_activity = {
             "type": "Follow",
@@ -79,15 +148,15 @@ class TestActivityProcessor(unittest.TestCase, TestConfigMixin):
         os.symlink(os.path.abspath(activity_file), queue_file)
 
         with patch('builtins.print') as mock_print:
-            process_queue(self.config)
+            process_inbox_queue(self.config)
 
             call_args = [call.args[0] for call in mock_print.call_args_list]
-            self.assertTrue(any('Processing 1 queued activities' in arg for arg in call_args))
+            self.assertTrue(any('Processing 1 queued inbox activities' in arg for arg in call_args))
             self.assertTrue(any('Processing Follow activity' in arg for arg in call_args))
 
     def test_malformed_activity_handling(self):
         """Test handling of malformed activity files"""
-        from activity_processor import process_queue
+        from activity_processor import process_inbox_queue
 
         inbox_dir = self.config['directories']['inbox']
         malformed_file = os.path.join(inbox_dir, 'malformed.json')
@@ -99,7 +168,7 @@ class TestActivityProcessor(unittest.TestCase, TestConfigMixin):
         os.symlink(os.path.abspath(malformed_file), queue_file)
 
         with patch('builtins.print') as mock_print:
-            process_queue(self.config)
+            process_inbox_queue(self.config)
 
             call_args = [call.args[0] for call in mock_print.call_args_list]
             self.assertTrue(any('Error loading activity' in arg for arg in call_args))
@@ -135,7 +204,8 @@ class TestActivityQueueIntegration(unittest.TestCase, TestConfigMixin):
 
     def test_inbox_to_queue_workflow(self):
         """Test that inbox endpoint properly queues activities"""
-        from app import app, save_inbox_activity, queue_activity_for_processing
+        from app import app, save_inbox_activity
+        from activity_processor import queue_inbox_activity
 
         follow_activity = {
             "type": "Follow",
@@ -144,7 +214,7 @@ class TestActivityQueueIntegration(unittest.TestCase, TestConfigMixin):
         }
 
         filename = save_inbox_activity(follow_activity)
-        queue_activity_for_processing(filename)
+        queue_inbox_activity(filename, self.config)
 
         inbox_dir = self.config['directories']['inbox']
         inbox_files = [f for f in os.listdir(inbox_dir) if os.path.isfile(os.path.join(inbox_dir, f)) and not f.endswith('.meta.json')]
@@ -163,7 +233,7 @@ class TestActivityQueueIntegration(unittest.TestCase, TestConfigMixin):
 
     def test_queue_cleanup_after_processing(self):
         """Test that queue symlinks are removed after successful processing"""
-        from activity_processor import process_queue
+        from activity_processor import process_inbox_queue
 
         follow_activity = {
             "type": "Follow",
@@ -184,7 +254,7 @@ class TestActivityQueueIntegration(unittest.TestCase, TestConfigMixin):
 
         self.assertEqual(len(os.listdir(queue_dir)), 1)
 
-        process_queue(self.config)
+        process_inbox_queue(self.config)
 
         self.assertEqual(len(os.listdir(queue_dir)), 0)
         self.assertTrue(os.path.exists(activity_file))

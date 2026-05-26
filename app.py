@@ -351,7 +351,8 @@ def inbox():
         filename = save_inbox_activity(activity, signed_by=signed_by)
 
         # Queue activity for processing by creating symlink
-        queue_activity_for_processing(filename)
+        from activity_processor import queue_inbox_activity
+        queue_inbox_activity(filename, config)
 
         actor = activity.get('actor', 'unknown')
         verified_status = "✓ verified" if signature_header else "⚠️  unverified"
@@ -422,21 +423,6 @@ def save_inbox_activity(activity, signed_by=None):
 
     print(f"✓ Saved inbox activity: {filepath}")
     return filename
-
-def queue_activity_for_processing(filename):
-    """Queue activity for processing by creating symlink in queue directory"""
-    queue_dir = os.path.join(config['directories']['inbox'], 'queue')
-    inbox_dir = config['directories']['inbox']
-
-    os.makedirs(queue_dir, exist_ok=True)
-
-    source_path = os.path.join(inbox_dir, filename)
-    queue_path = os.path.join(queue_dir, filename)
-
-    # Create symlink if it doesn't exist
-    if not os.path.exists(queue_path):
-        os.symlink(os.path.abspath(source_path), queue_path)
-        print(f"✓ Queued activity for processing: {filename}")
 
 if __name__ == '__main__':
     # Generate actor.json on startup
