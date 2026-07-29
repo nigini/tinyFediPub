@@ -375,6 +375,18 @@ def followers():
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
+@app.route(f'/{NAMESPACE}/following')
+@require_activitypub_accept
+def following():
+    """Following collection endpoint"""
+    following_list = follow_store.get_following(config)
+    collection = templates.render_ordered_collection(
+        f"{generate_base_url(config)}/following", following_list
+    )
+    response = jsonify(collection)
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
 @app.route(f'/{NAMESPACE}/streams/posts')
 @require_c2s_auth
 @require_activitypub_accept
