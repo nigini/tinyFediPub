@@ -3,10 +3,7 @@
 Tests for C2S bearer token authentication
 """
 import unittest
-import os
-import json
 import sys
-from unittest.mock import patch
 
 sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
@@ -23,61 +20,38 @@ class TestC2SAuth(unittest.TestCase, TestConfigMixin):
             security={"c2s_token": C2S_TEST_TOKEN})
 
         self.create_test_actor(actor_name="Test User")
+        self.setup_webfinger()
+        self.setup_test_client()
 
-        # Create webfinger.json
-        webfinger = {
-            "subject": "acct:testuser@c2s-test.example.com",
-            "links": [{"rel": "self", "type": "application/activity+json",
-                        "href": "https://c2s-test.example.com/activitypub/actor"}]
-        }
-        webfinger_path = self.get_test_file_path('data_root', 'webfinger.json')
-        with open(webfinger_path, 'w') as f:
-            json.dump(webfinger, f)
-
-        from app import app, write_actor_config
-        self.app = app
-        self.client = app.test_client()
-        app.config['TESTING'] = True
-
-        with patch('builtins.print'):
-            write_actor_config()
-
-        # Create a test post so streams/posts has content
-        from post_utils import create_post
-        with patch('builtins.print'):
-            self.post_obj, self.post_id = create_post(
-                'article', "Auth Test Post", "Content", "https://example.com/test")
+        # Create a test post so streams/published has content
+        self.create_local_post('test-post-1', 'Auth Test Post', 'Content')
 
     def tearDown(self):
         self.teardown_test_environment()
 
-    def _auth_header(self, token=C2S_TEST_TOKEN):
-        return {'Authorization': f'Bearer {token}',
-                'Accept': 'application/activity+json'}
-
-    # --- streams/posts auth tests ---
+    # --- streams/published auth tests ---
 
     def test_streams_posts_with_valid_token(self):
-        """Authenticated request to streams/posts should succeed"""
-        response = self.client.get('/activitypub/streams/posts',
-                                   headers=self._auth_header())
+        """Authenticated request to streams/published should succeed"""
+        response = self.client.get('/activitypub/streams/published',
+                                   headers=self.auth_headers())
         self.assertEqual(response.status_code, 200)
 
     def test_streams_posts_without_token(self):
-        """Unauthenticated request to streams/posts should return 401"""
-        response = self.client.get('/activitypub/streams/posts',
+        """Unauthenticated request to streams/published should return 401"""
+        response = self.client.get('/activitypub/streams/published',
                                    headers={'Accept': 'application/activity+json'})
         self.assertEqual(response.status_code, 401)
 
     def test_streams_posts_with_wrong_token(self):
         """Request with wrong token should return 401"""
-        response = self.client.get('/activitypub/streams/posts',
-                                   headers=self._auth_header('wrong-token'))
+        response = self.client.get('/activitypub/streams/published',
+                                   headers=self.auth_headers('wrong-token'))
         self.assertEqual(response.status_code, 401)
 
     def test_streams_posts_with_malformed_auth(self):
         """Request with malformed Authorization header should return 401"""
-        response = self.client.get('/activitypub/streams/posts',
+        response = self.client.get('/activitypub/streams/published',
                                    headers={'Authorization': 'Basic abc123',
                                             'Accept': 'application/activity+json'})
         self.assertEqual(response.status_code, 401)
@@ -116,8 +90,8 @@ class TestC2SAuth(unittest.TestCase, TestConfigMixin):
         original = app_module.config['security']['c2s_token']
         app_module.config['security']['c2s_token'] = 'REPLACE_ME'
         try:
-            response = self.client.get('/activitypub/streams/posts',
-                                       headers=self._auth_header('REPLACE_ME'))
+            response = self.client.get('/activitypub/streams/published',
+                                       headers=self.auth_headers('REPLACE_ME'))
             self.assertEqual(response.status_code, 500)
         finally:
             app_module.config['security']['c2s_token'] = original

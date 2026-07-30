@@ -299,3 +299,140 @@ class TestConfigMixin:
         ).decode('utf-8')
 
         return private_key_pem, public_key_pem
+
+    # --- Test client helpers ---
+
+    def setup_test_client(self):
+        """Import app, create test client, and write actor config."""
+        from unittest.mock import patch
+        from app import app, write_actor_config
+        self.app = app
+        self.client = app.test_client()
+        app.config['TESTING'] = True
+        with patch('builtins.print'):
+            write_actor_config()
+
+    def setup_webfinger(self):
+        """Create webfinger.json for the test actor."""
+        import json
+        domain = self.config['server']['domain']
+        username = self.config['activitypub']['username']
+        namespace = self.config['activitypub']['namespace']
+
+        webfinger = {
+            "subject": f"acct:{username}@{domain}",
+            "links": [{
+                "rel": "self",
+                "type": "application/activity+json",
+                "href": f"https://{domain}/{namespace}/actor"
+            }]
+        }
+        path = self.get_test_file_path('data_root', 'webfinger.json')
+        with open(path, 'w') as f:
+            json.dump(webfinger, f)
+
+    def auth_headers(self, token=None):
+        """Return standard auth + Accept headers for C2S requests.
+
+        Args:
+            token: Bearer token (defaults to config['security']['c2s_token'])
+
+        Returns:
+            dict: Headers dict
+        """
+        if token is None:
+            token = self.config['security'].get('c2s_token', '')
+        return {
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/activity+json'
+        }
+
+    def create_local_post(self, uuid, title, content, obj_type='Article', **extra):
+        """Create a local post file directly on disk for testing.
+
+        Stores at posts_local/{uuid}/post.json, mirroring the CLI's create_post().
+
+        Args:
+            uuid: Post UUID
+            title: Post title (used as 'name')
+            content: Post content
+            obj_type: AS2 type (default 'Article')
+            **extra: Additional fields to include in the post object
+
+        Returns:
+            dict: The post object
+        """
+        import os
+        posts_dir = self.config['directories']['posts_local']
+        post_dir = os.path.join(posts_dir, uuid)
+        os.makedirs(post_dir, exist_ok=True)
+
+        post = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": obj_type,
+            "id": f"https://{self.config['server']['domain']}/{self.config['activitypub']['namespace']}/posts/{uuid}",
+            "name": title,
+            "content": content,
+            "published": "2026-03-20T10:00:00Z"
+        }
+        post.update(extra)
+
+        with open(os.path.join(post_dir, 'post.json'), 'w') as f:
+            json.dump(post, f)
+
+        return post
+
+    def create_remote_post(self, actor_domain, actor_path, object_id, obj_type, content,
+                           name=None, tag=None, **extra):
+        """Create a remote post file directly on disk for testing.
+
+        Mirrors CreateProcessor._store_remote_post(): stores at
+        posts_remote/{actor_domain}/{actor_path}/{object_id}/object.json + metadata.json.
+
+        Args:
+            actor_domain: Domain of the remote actor (e.g. 'mastodon.social')
+            actor_path: Path of the remote actor (e.g. 'users/alice')
+            object_id: ID of the object (e.g. '12345')
+            obj_type: AS2 type (e.g. 'Note', 'Article')
+            content: Object content
+            name: Optional title (for Article type)
+            tag: Optional list of tag objects
+            **extra: Additional fields to include in the object
+
+        Returns:
+            dict: The object as stored
+        """
+        import os
+        import json
+        url_path = f"{actor_domain}/{actor_path}/{object_id}"
+        remote_dir = os.path.join(self.config['directories']['posts_remote'], url_path)
+        os.makedirs(remote_dir, exist_ok=True)
+
+        obj = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": obj_type,
+            "id": f"https://{actor_domain}/{actor_path}/{object_id}",
+            "attributedTo": f"https://{actor_domain}/{actor_path}",
+            "content": content,
+            "published": "2026-03-20T10:00:00Z",
+            "to": ["https://www.w3.org/ns/activitystreams#Public"],
+            "cc": [f"https://{actor_domain}/{actor_path}/followers"]
+        }
+        if name:
+            obj["name"] = name
+        if tag:
+            obj["tag"] = tag
+        obj.update(extra)
+
+        with open(os.path.join(remote_dir, 'object.json'), 'w') as f:
+            json.dump(obj, f)
+
+        metadata = {
+            "signed_by": f"https://{actor_domain}/{actor_path}#main-key",
+            "received_at": obj["published"],
+            "accepted_by_rule": "is_following"
+        }
+        with open(os.path.join(remote_dir, 'metadata.json'), 'w') as f:
+            json.dump(metadata, f)
+
+        return obj

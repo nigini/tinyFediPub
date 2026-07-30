@@ -1,8 +1,0 @@
-{
-  "@context": "https://www.w3.org/ns/activitystreams",
-  "type": "OrderedCollection",
-  "id": "https://nigini.me/activitypub/outbox",
-  "totalItems": 0,
-  "orderedItems": [
-  ]
-}

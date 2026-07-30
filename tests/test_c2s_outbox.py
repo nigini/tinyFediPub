@@ -6,7 +6,6 @@ import unittest
 import os
 import json
 import sys
-from unittest.mock import patch
 
 sys.path.insert(0, '.')
 from tests.test_config import TestConfigMixin
@@ -24,21 +23,8 @@ class TestC2SOutboxPost(unittest.TestCase, TestConfigMixin):
             security={"c2s_token": C2S_TOKEN})
 
         self.create_test_actor(actor_name="Test User")
-
-        webfinger = {
-            "subject": "acct:testuser@c2s-test.example.com",
-            "links": [{"rel": "self", "type": "application/activity+json",
-                        "href": "https://c2s-test.example.com/activitypub/actor"}]
-        }
-        with open(self.get_test_file_path('data_root', 'webfinger.json'), 'w') as f:
-            json.dump(webfinger, f)
-
-        from app import app, write_actor_config
-        self.app = app
-        self.client = app.test_client()
-        app.config['TESTING'] = True
-        with patch('builtins.print'):
-            write_actor_config()
+        self.setup_webfinger()
+        self.setup_test_client()
 
     def tearDown(self):
         self.teardown_test_environment()
@@ -178,16 +164,15 @@ class TestC2SOutboxPost(unittest.TestCase, TestConfigMixin):
         self.assertEqual(activity['object']['content'], '<p>Wrapped</p>')
 
     def test_post_appears_in_streams(self):
-        """A posted object should appear in streams/posts"""
+        """A posted object should appear in streams/published"""
         self._post_to_outbox({
             "@context": "https://www.w3.org/ns/activitystreams",
             "type": "Note",
             "content": "<p>Stream test</p>"
         })
 
-        response = self.client.get('/activitypub/streams/posts',
-            headers={'Accept': 'application/activity+json',
-                     'Authorization': f'Bearer {C2S_TOKEN}'})
+        response = self.client.get('/activitypub/streams/published',
+                                   headers=self.auth_headers())
         data = response.get_json()
         self.assertEqual(data['totalItems'], 1)
         self.assertEqual(data['orderedItems'][0]['content'], '<p>Stream test</p>')

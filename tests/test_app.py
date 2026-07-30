@@ -84,7 +84,7 @@ class TestFlaskApp(unittest.TestCase, TestConfigMixin):
 
         self.assertIn('streams', data)
         self.assertIsInstance(data['streams'], list)
-        self.assertIn('https://app-test.example.com/activitypub/streams/posts', data['streams'])
+        self.assertIn('https://app-test.example.com/activitypub/streams/published', data['streams'])
     
     def test_actor_wrong_content_type(self):
         """Test actor endpoint with wrong Accept header"""

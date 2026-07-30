@@ -52,6 +52,20 @@ CONTENT_TYPE_AP = 'application/activity+json'
 CONTENT_TYPE_LD = 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
 CORS_ORIGINS = config['security'].get('cors_origins', [])
 
+@app.before_request
+def handle_cors_preflight():
+    """Handle CORS preflight (OPTIONS) requests before route matching."""
+    if request.method == 'OPTIONS':
+        origin = request.headers.get('Origin')
+        if origin and origin in CORS_ORIGINS:
+            response = app.make_response(('', 204))
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Accept'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+            return response
+    return None
+
+
 @app.after_request
 def add_cors_headers(response):
     """Add CORS headers for configured origins (tinyHome browser access)"""
@@ -122,18 +136,19 @@ def actor():
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
-def list_json_files(pattern, sort_key='name', reverse=True):
+def list_json_files(pattern, sort_key='name', reverse=True, recursive=False):
     """List JSON files matching a glob pattern, sorted. Does NOT load them.
 
     Args:
-        pattern: Glob pattern (e.g., 'data/outbox/*.json' or 'data/posts/*/post.json')
+        pattern: Glob pattern (e.g., 'data/outbox/*.json' or 'data/posts/**/object.json')
         sort_key: 'name' for filename sort, 'mtime' for modification time
         reverse: True for reverse (most recent first)
+        recursive: True for **/ recursive matching
 
     Returns:
         list of file paths, sorted
     """
-    paths = glob.glob(pattern)
+    paths = glob.glob(pattern, recursive=recursive)
     if sort_key == 'mtime':
         paths.sort(key=os.path.getmtime, reverse=reverse)
     else:
@@ -387,20 +402,36 @@ def following():
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
 
-@app.route(f'/{NAMESPACE}/streams/posts')
+@app.route(f'/{NAMESPACE}/streams/published')
 @require_c2s_auth
 @require_activitypub_accept
-def streams_posts():
-    """Streams/posts endpoint - paginated collection of post objects (not activities)"""
+def streams_published():
+    """Streams/published endpoint - paginated collection of my published objects."""
     from post_utils import get_local_posts_dir
     posts_dir = get_local_posts_dir(config)
     os.makedirs(posts_dir, exist_ok=True)
     paths = list_json_files(os.path.join(posts_dir, '*/post.json'), sort_key='mtime')
-    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/streams/posts"
+    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/streams/published"
 
     response = jsonify(paginate_collection(paths, base_url))
     response.headers['Content-Type'] = CONTENT_TYPE_AP
     return response
+
+
+@app.route(f'/{NAMESPACE}/streams/followed')
+@require_c2s_auth
+@require_activitypub_accept
+def streams_followed():
+    """Streams/followed endpoint - paginated collection of objects from followed actors."""
+    posts_dir = config['directories']['posts_remote']
+    os.makedirs(posts_dir, exist_ok=True)
+    paths = list_json_files(os.path.join(posts_dir, '**/object.json'), sort_key='mtime', recursive=True)
+    base_url = f"{PROTOCOL}://{DOMAIN}/{NAMESPACE}/streams/followed"
+
+    response = jsonify(paginate_collection(paths, base_url))
+    response.headers['Content-Type'] = CONTENT_TYPE_AP
+    return response
+
 
 def save_inbox_activity(activity, signed_by=None):
     """Save incoming activity to inbox folder with sibling metadata file"""
