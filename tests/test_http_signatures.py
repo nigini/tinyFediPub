@@ -9,6 +9,7 @@ import unittest
 import base64
 import hashlib
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -759,5 +760,185 @@ class TestCompleteRequestVerification(unittest.TestCase):
             self.assertTrue(result)
 
 
-if __name__ == '__main__':
-    unittest.main()
+class TestSignedRequests(unittest.TestCase):
+    """Test high-level signed_get and signed_post helpers"""
+
+    def setUp(self):
+        self.config = {"server": {"domain": "test.example.com"},
+                       "security": {"private_key_file": "/dev/null"}}
+
+    # --- signed_get ---
+
+    def test_signed_get_returns_json_on_success(self):
+        """signed_get returns parsed JSON when the remote responds"""
+        expected = {"type": "Person", "inbox": "https://example.com/inbox"}
+        with patch('http_signatures._signed_request') as mock_req:
+            mock_req.return_value = MagicMock(ok=True, status_code=200)
+            mock_req.return_value.json.return_value = expected
+
+            result = http_signatures.signed_get(
+                "https://mastodon.social/users/alice", self.config)
+            self.assertEqual(result, expected)
+
+    def test_signed_get_returns_none_on_http_error(self):
+        """signed_get returns None when the remote returns an error code"""
+        with patch('http_signatures._signed_request') as mock_req:
+            mock_req.return_value = MagicMock(ok=False, status_code=403)
+            mock_req.return_value.raise_for_status.side_effect = Exception("403")
+
+            result = http_signatures.signed_get(
+                "https://mastodon.social/users/alice", self.config)
+            self.assertIsNone(result)
+
+    def test_signed_get_returns_none_on_network_error(self):
+        """signed_get returns None on network failure"""
+        with patch('http_signatures._signed_request') as mock_req:
+            mock_req.side_effect = Exception("Connection refused")
+
+            result = http_signatures.signed_get(
+                "https://mastodon.social/users/alice", self.config)
+            self.assertIsNone(result)
+
+    # --- signed_post ---
+
+    def test_signed_post_returns_true_on_success(self):
+        """signed_post returns True when the remote accepts"""
+        with patch('http_signatures._signed_request') as mock_req:
+            mock_req.return_value = MagicMock(ok=True, status_code=200)
+
+            result = http_signatures.signed_post(
+                "https://example.com/inbox",
+                {"type": "Follow", "actor": "https://test.example.com/actor"},
+                self.config)
+            self.assertTrue(result)
+
+    def test_signed_post_returns_false_on_http_error(self):
+        """signed_post returns False when the remote rejects"""
+        with patch('http_signatures._signed_request') as mock_req:
+            mock_req.return_value = MagicMock(ok=False, status_code=401)
+            mock_req.return_value.raise_for_status.side_effect = Exception("401")
+
+            result = http_signatures.signed_post(
+                "https://example.com/inbox",
+                {"type": "Follow"},
+                self.config)
+            self.assertFalse(result)
+
+    def test_signed_post_returns_false_on_network_error(self):
+        """signed_post returns False on network failure"""
+        with patch('http_signatures._signed_request') as mock_req:
+            mock_req.side_effect = Exception("Timeout")
+
+            result = http_signatures.signed_post(
+                "https://example.com/inbox",
+                {"type": "Follow"},
+                self.config)
+            self.assertFalse(result)
+
+
+class TestLoadSigningKey(TestConfigMixin, unittest.TestCase):
+    """Test _load_signing_key reads keys from config"""
+
+    def setUp(self):
+        # We'll build config manually so we control the key file path
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp(prefix='tinyfedi_test_http_')
+        self.key_path = os.path.join(self.tmpdir, 'test_key.pem')
+
+        self.config = {
+            "server": {"domain": "key-test.example.com", "user_agent": "TinyFedi/1.0"},
+            "security": {"private_key_file": self.key_path},
+            "activitypub": {"username": "testuser", "namespace": "activitypub"},
+            "directories": {"data_root": self.tmpdir}
+        }
+
+        # Generate a real RSA key and write it
+        self.priv, self.pub = self.generate_test_rsa_keys()
+        with open(self.key_path, 'w') as f:
+            f.write(self.priv)
+
+        # Patch post_utils.get_actor_info to return a proper actor
+        self.actor_patch = patch('post_utils.get_actor_info')
+        self.mock_actor = self.actor_patch.start()
+        self.mock_actor.return_value = {
+            "id": "https://key-test.example.com/activitypub/actor",
+            "publicKey": {
+                "id": "https://key-test.example.com/activitypub/actor#main-key",
+                "publicKeyPem": self.pub
+            }
+        }
+
+    def tearDown(self):
+        self.actor_patch.stop()
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_load_signing_key_returns_key_and_key_id(self):
+        """_load_signing_key returns (private_key_pem, key_id)"""
+        key_pem, key_id = http_signatures._load_signing_key(self.config)
+        self.assertIsNotNone(key_pem)
+        self.assertIn('#main-key', key_id)
+        self.assertIn('BEGIN PRIVATE KEY', key_pem)
+
+    def test_load_signing_key_raises_on_missing_public_key(self):
+        """_load_signing_key raises RuntimeError when actor has no publicKey"""
+        self.mock_actor.return_value = {"id": "https://example.com/actor"}
+        with self.assertRaises(RuntimeError):
+            http_signatures._load_signing_key(self.config)
+
+
+class TestSignRequestGet(TestSignatureSigning):
+    """Test sign_request with GET method (no body, fewer signed headers)"""
+
+    def test_sign_request_get_excludes_digest(self):
+        """GET signing should not add a digest header"""
+        headers = {
+            "host": "example.com",
+            "date": formatdate(timeval=None, localtime=False, usegmt=True),
+        }
+        signature_header = http_signatures.sign_request(
+            'GET', '/users/alice', headers, b'', self.private_key_pem, "https://example.com/actor#main-key")
+
+        # Digest should NOT be in headers
+        self.assertNotIn('digest', headers)
+
+        # Parsed headers field should NOT include digest or content-type
+        sig_components = http_signatures.parse_signature_header(signature_header)
+        headers_signed = sig_components['headers']
+        self.assertIn('(request-target)', headers_signed)
+        self.assertIn('host', headers_signed)
+        self.assertIn('date', headers_signed)
+        self.assertNotIn('digest', headers_signed)
+        self.assertNotIn('content-type', headers_signed)
+
+    def test_sign_request_get_signature_is_valid(self):
+        """A GET signature should be verifiable against the signing string"""
+        method = 'GET'
+        path = '/users/alice'
+        headers = {
+            "host": "example.com",
+            "date": formatdate(timeval=None, localtime=False, usegmt=True),
+        }
+        key_id = "https://example.com/actor#main-key"
+        body = b''
+
+        signature_header = http_signatures.sign_request(
+            method, path, headers, body, self.private_key_pem, key_id)
+
+        sig_components = http_signatures.parse_signature_header(signature_header)
+        headers_signed = sig_components['headers']
+        signing_string = http_signatures.build_signing_string(
+            headers_signed, method, path, headers)
+
+        signature_bytes = base64.b64decode(sig_components['signature'])
+        public_key = serialization.load_pem_public_key(
+            self.public_key_pem.encode('utf-8'), backend=default_backend())
+
+        try:
+            public_key.verify(signature_bytes, signing_string.encode('utf-8'),
+                            padding.PKCS1v15(), hashes.SHA256())
+            valid = True
+        except Exception:
+            valid = False
+
+        self.assertTrue(valid, "GET signature should verify correctly")

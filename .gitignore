@@ -11,3 +11,4 @@ keys/
 
 # User configuration - use config.json.example as template
 config.json
+static

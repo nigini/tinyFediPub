@@ -17,6 +17,7 @@ import json
 import re
 import requests
 from datetime import datetime, timezone
+from email.utils import formatdate
 from typing import Optional, Dict, Tuple
 from urllib.parse import urlparse
 from cryptography.hazmat.primitives import hashes, serialization
@@ -235,31 +236,43 @@ def verify_signature(signature_header: str, method: str, path: str, headers: Dic
         return False
 
 
-def sign_request(method: str, path: str, headers: Dict[str, str], body: bytes, private_key_pem: str, key_id: str) -> str:
+def sign_request(method: str, path: str, headers: Dict[str, str], body: bytes,
+                 private_key_pem: str, key_id: str) -> str:
     """
     Generate HTTP signature for outgoing request
 
+    Builds the signing string from relevant headers, signs with the
+    actor's private key, and returns a ``Signature`` header value.
+
+    For POST requests ``digest`` and ``content-type`` are signed;
+    for GET requests they are omitted.
+
     Args:
-        method: HTTP method (e.g., "POST")
-        path: Request path (e.g., "/inbox")
-        headers: Dict of headers to include in request
-        body: Request body as bytes
+        method: HTTP method ("GET", "POST")
+        path: Request path (e.g. "/inbox")
+        headers: Dict of headers to include in the signing string
+        body: Request body as bytes (``b''`` for GET)
         private_key_pem: Your private key (PEM format)
-        key_id: Your public key ID URL (e.g., "https://yourdomain.com/activitypub/actor#main-key")
+        key_id: Your public key ID URL
 
     Returns:
-        str: Signature header value to add to request
+        str: ``Signature`` header value
     """
     try:
-        # Compute digest of body
-        digest = compute_digest(body)
-        headers['digest'] = digest
+        is_post = method.upper() == 'POST'
 
-        # Headers to sign (per ActivityPub spec)
-        headers_to_sign = '(request-target) host date digest content-type'
+        # Only compute and attach digest for requests with a body
+        if is_post and body:
+            digest = compute_digest(body)
+            headers['digest'] = digest
+
+        # Headers included in the signature
+        signed_headers = '(request-target) host date'
+        if is_post:
+            signed_headers += ' digest content-type'
 
         # Build signing string
-        signing_string = build_signing_string(headers_to_sign, method, path, headers)
+        signing_string = build_signing_string(signed_headers, method, path, headers)
 
         # Load private key
         private_key = serialization.load_pem_private_key(
@@ -279,13 +292,102 @@ def sign_request(method: str, path: str, headers: Dict[str, str], body: bytes, p
         signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
 
         # Build Signature header
-        signature_header = f'keyId="{key_id}",algorithm="hs2019",headers="{headers_to_sign}",signature="{signature_b64}"'
+        signature_header = f'keyId="{key_id}",algorithm="hs2019",headers="{signed_headers}",signature="{signature_b64}"'
 
         return signature_header
 
     except Exception as e:
         print(f"Error signing request: {e}")
         raise
+
+
+# ---------------------------------------------------------------------------
+# High-level request helpers — signed GET / POST
+# ---------------------------------------------------------------------------
+
+
+def _load_signing_key(config: dict) -> Tuple[str, str]:
+    """Load private key PEM + keyId from config."""
+    from post_utils import get_actor_info
+
+    key_file = config['security']['private_key_file']
+    with open(key_file) as f:
+        private_key_pem = f.read()
+
+    actor = get_actor_info()
+    if not actor or 'publicKey' not in actor:
+        raise RuntimeError("Actor document missing publicKey — cannot sign")
+
+    key_id = actor['publicKey']['id']
+    return private_key_pem, key_id
+
+
+def _signed_request(method: str, url: str, config: dict,
+                    extra_headers: Optional[dict] = None,
+                    body: Optional[bytes] = None) -> requests.Response:
+    """
+    Perform a signed HTTP request (GET or POST).
+
+    ``body`` must be ``None`` (or absent) for GET requests.
+    ``body`` must be ``bytes`` for POST requests.
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc
+    path = parsed.path
+    if parsed.query:
+        path += f"?{parsed.query}"
+
+    headers = {
+        'Host': host,
+        'Date': formatdate(timeval=None, localtime=False, usegmt=True),
+        'User-Agent': config.get('server', {}).get('user_agent', 'TinyFedi/1.0'),
+        **(extra_headers or {}),
+    }
+
+    if body is not None:
+        headers['Content-Type'] = 'application/activity+json'
+
+    private_key_pem, key_id = _load_signing_key(config)
+    sig = sign_request(method, path, headers, body or b'', private_key_pem, key_id)
+    headers['Signature'] = sig
+
+    if method.upper() == 'GET':
+        return requests.get(url, headers=headers, timeout=30)
+    else:
+        return requests.post(url, data=body or b'', headers=headers, timeout=30)
+
+
+def signed_get(url: str, config: dict) -> Optional[dict]:
+    """
+    Fetch a JSON document with an HTTP-signed GET.
+
+    Returns the parsed JSON dict, or ``None`` on failure.
+    """
+    try:
+        headers = {'Accept': 'application/activity+json, application/ld+json'}
+        r = _signed_request('GET', url, config, extra_headers=headers)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"Signed GET failed for {url}: {e}")
+        return None
+
+
+def signed_post(url: str, body: dict, config: dict) -> bool:
+    """
+    Send a signed POST with a JSON body.
+
+    Returns ``True`` on success (HTTP 2xx).
+    """
+    try:
+        data = json.dumps(body).encode('utf-8')
+        r = _signed_request('POST', url, config, body=data)
+        r.raise_for_status()
+        print(f"✓ Signed POST succeeded to {url}")
+        return True
+    except Exception as e:
+        print(f"✗ Signed POST failed to {url}: {e}")
+        return False
 
 
 def verify_digest(digest_header: str, body: bytes) -> bool:

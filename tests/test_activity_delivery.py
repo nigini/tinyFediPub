@@ -15,7 +15,7 @@ from tests.test_config import TestConfigMixin
 
 
 class TestFetchActorInbox(unittest.TestCase):
-    """Test fetching actor inbox URLs"""
+    """Test fetching actor inbox URLs via signed_get"""
 
     def test_fetch_inbox_success(self):
         """Test successfully fetching inbox from actor document"""
@@ -30,81 +30,41 @@ class TestFetchActorInbox(unittest.TestCase):
 
         config = {"server": {}}
 
-        with patch('activity_delivery.requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_actor
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
+        with patch('http_signatures.signed_get') as mock_get:
+            mock_get.return_value = mock_actor
 
             result = activity_delivery.fetch_actor_inbox(actor_url, config)
 
             self.assertEqual(result, expected_inbox)
-            mock_get.assert_called_once()
-
-            # Verify headers
-            call_args = mock_get.call_args
-            headers = call_args[1]['headers']
-            self.assertIn('Accept', headers)
-            self.assertIn('application/activity+json', headers['Accept'])
+            mock_get.assert_called_once_with(actor_url, config)
 
     def test_fetch_inbox_missing(self):
         """Test actor document without inbox"""
-        actor_url = "https://mastodon.social/users/alice"
-
-        mock_actor = {
-            "id": actor_url,
-            "type": "Person"
-            # No inbox field
-        }
-
-        config = {"server": {}}
-
-        with patch('activity_delivery.requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_actor
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            result = activity_delivery.fetch_actor_inbox(actor_url, config)
-
+        mock_actor = {"id": "https://mastodon.social/users/alice", "type": "Person"}
+        with patch('http_signatures.signed_get') as mock_get:
+            mock_get.return_value = mock_actor
+            result = activity_delivery.fetch_actor_inbox(
+                "https://mastodon.social/users/alice", {})
             self.assertIsNone(result)
 
     def test_fetch_inbox_network_error(self):
         """Test handling network errors when fetching inbox"""
-        actor_url = "https://mastodon.social/users/alice"
-        config = {"server": {}}
-
-        with patch('activity_delivery.requests.get') as mock_get:
-            mock_get.side_effect = Exception("Network error")
-
-            result = activity_delivery.fetch_actor_inbox(actor_url, config)
-
+        with patch('http_signatures.signed_get') as mock_get:
+            mock_get.return_value = None
+            result = activity_delivery.fetch_actor_inbox(
+                "https://mastodon.social/users/alice", {})
             self.assertIsNone(result)
 
-    def test_fetch_inbox_with_user_agent(self):
-        """Test that custom User-Agent is used"""
-        actor_url = "https://mastodon.social/users/alice"
+    def test_fetch_inbox_passes_config(self):
+        """Test config is forwarded to signed_get"""
         custom_ua = "MyFedi/2.0"
-
-        mock_actor = {
-            "id": actor_url,
-            "inbox": "https://mastodon.social/users/alice/inbox"
-        }
-
         config = {"server": {"user_agent": custom_ua}}
-
-        with patch('activity_delivery.requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json.return_value = mock_actor
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            activity_delivery.fetch_actor_inbox(actor_url, config)
-
-            # Verify User-Agent header
-            call_args = mock_get.call_args
-            headers = call_args[1]['headers']
-            self.assertEqual(headers['User-Agent'], custom_ua)
+        with patch('http_signatures.signed_get') as mock_get:
+            mock_get.return_value = {"inbox": "https://example.com/inbox"}
+            activity_delivery.fetch_actor_inbox(
+                "https://mastodon.social/users/alice", config)
+            mock_get.assert_called_once_with(
+                "https://mastodon.social/users/alice", config)
 
 
 class TestDeliverActivity(TestConfigMixin, unittest.TestCase):
@@ -123,77 +83,30 @@ class TestDeliverActivity(TestConfigMixin, unittest.TestCase):
         self.teardown_test_environment()
 
     def test_deliver_activity_success(self):
-        """Test successful activity delivery"""
-        with patch('activity_delivery.requests.post') as mock_post, \
-             patch('activity_delivery.load_private_key') as mock_load_key, \
-             patch('post_utils.get_actor_info') as mock_actor_info:
-
-            # Setup mocks
-            mock_load_key.return_value = "fake-private-key"
-            mock_actor_info.return_value = {
-                "publicKey": {
-                    "id": "https://example.com/actor#main-key"
-                }
-            }
-
-            mock_response = MagicMock()
-            mock_response.raise_for_status = MagicMock()
-            mock_post.return_value = mock_response
-
-            # Mock sign_request to avoid actual signing
-            with patch('activity_delivery.http_signatures.sign_request') as mock_sign:
-                mock_sign.return_value = "signature_string"
-
-                result = activity_delivery.deliver_activity(
-                    self.activity,
-                    self.inbox_url,
-                    self.config
-                )
-
+        """Test successful activity delivery via signed_post"""
+        with patch('http_signatures.signed_post') as mock_post:
+            mock_post.return_value = True
+            result = activity_delivery.deliver_activity(
+                self.activity, self.inbox_url, self.config)
             self.assertTrue(result)
-            mock_post.assert_called_once()
+            mock_post.assert_called_once_with(
+                self.inbox_url, self.activity, self.config)
 
     def test_deliver_activity_network_error(self):
         """Test handling network errors during delivery"""
-        with patch('activity_delivery.requests.post') as mock_post, \
-             patch('activity_delivery.load_private_key') as mock_load_key, \
-             patch('post_utils.get_actor_info') as mock_actor_info:
-
-            # Setup mocks
-            mock_load_key.return_value = "fake-private-key"
-            mock_actor_info.return_value = {
-                "publicKey": {
-                    "id": "https://example.com/actor#main-key"
-                }
-            }
-
-            mock_post.side_effect = Exception("Network error")
-
-            with patch('activity_delivery.http_signatures.sign_request') as mock_sign:
-                mock_sign.return_value = "signature_string"
-
-                result = activity_delivery.deliver_activity(
-                    self.activity,
-                    self.inbox_url,
-                    self.config
-                )
-
+        with patch('http_signatures.signed_post') as mock_post:
+            mock_post.return_value = False
+            result = activity_delivery.deliver_activity(
+                self.activity, self.inbox_url, self.config)
             self.assertFalse(result)
 
     def test_deliver_activity_missing_actor_key(self):
-        """Test handling missing actor public key"""
-        with patch('activity_delivery.load_private_key') as mock_load_key, \
-             patch('post_utils.get_actor_info') as mock_actor_info:
-
-            mock_load_key.return_value = "fake-private-key"
-            mock_actor_info.return_value = {}  # No publicKey field
-
+        """Test handling when actor has no public key for signing"""
+        activity = {"type": "Create", "actor": "https://example.com/actor"}
+        with patch('http_signatures.signed_post') as mock_post:
+            mock_post.return_value = False
             result = activity_delivery.deliver_activity(
-                self.activity,
-                self.inbox_url,
-                self.config
-            )
-
+                activity, self.inbox_url, self.config)
             self.assertFalse(result)
 
 

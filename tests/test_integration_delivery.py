@@ -132,9 +132,10 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
 
         # Step 2 & 3: Process the activity with mocked delivery
         # Mock the remote actor fetch, signing, and Accept delivery
-        with patch('activity_delivery.requests.get') as mock_get, \
-             patch('activity_delivery.requests.post') as mock_post, \
-             patch('http_signatures.sign_request') as mock_sign:
+        with patch('http_signatures.requests.get') as mock_get, \
+             patch('http_signatures.requests.post') as mock_post, \
+             patch('http_signatures.sign_request') as mock_sign, \
+             patch('http_signatures._load_signing_key') as mock_key:
 
             # Mock fetching Alice's actor (for inbox URL)
             mock_actor_response = MagicMock()
@@ -149,6 +150,9 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
             }
             mock_actor_response.raise_for_status = MagicMock()
             mock_get.return_value = mock_actor_response
+
+            # Mock signing key (private key PEM, key ID)
+            mock_key.return_value = ("fake-private-key", "https://test.example.com/activitypub/actor#main-key")
 
             # Mock signing (return fake signature)
             mock_sign.return_value = "fake_signature_string"
@@ -237,9 +241,10 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
         inbox_dir = self.config['directories']['inbox']
         queue_dir = os.path.join(self.config['directories']['inbox'], 'queue')
 
-        with patch('activity_delivery.requests.get') as mock_get, \
-             patch('activity_delivery.requests.post') as mock_post, \
-             patch('http_signatures.sign_request') as mock_sign:
+        with patch('http_signatures.requests.get') as mock_get, \
+             patch('http_signatures.requests.post') as mock_post, \
+             patch('http_signatures.sign_request') as mock_sign, \
+             patch('http_signatures._load_signing_key') as mock_key:
 
             mock_actor_response = MagicMock()
             mock_actor_response.json.return_value = {
@@ -249,6 +254,7 @@ class TestDeliveryIntegration(TestConfigMixin, unittest.TestCase):
             mock_actor_response.raise_for_status = MagicMock()
             mock_get.return_value = mock_actor_response
 
+            mock_key.return_value = ("fake-private-key", "https://test.example.com/activitypub/actor#main-key")
             mock_sign.return_value = "fake_signature_string"
             mock_post.return_value = MagicMock(raise_for_status=MagicMock())
 
