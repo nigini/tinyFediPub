@@ -781,14 +781,63 @@ class TestSignedRequests(unittest.TestCase):
             self.assertEqual(result, expected)
 
     def test_signed_get_returns_none_on_http_error(self):
-        """signed_get returns None when the remote returns an error code"""
+        """signed_get returns None when both attempts fail"""
+        fail = MagicMock(ok=False, status_code=403)
+        fail.raise_for_status.side_effect = Exception("403")
+
         with patch('http_signatures._signed_request') as mock_req:
-            mock_req.return_value = MagicMock(ok=False, status_code=403)
-            mock_req.return_value.raise_for_status.side_effect = Exception("403")
+            mock_req.return_value = fail
 
             result = http_signatures.signed_get(
                 "https://mastodon.social/users/alice", self.config)
             self.assertIsNone(result)
+            # All three strategies exhausted
+            self.assertEqual(mock_req.call_count, 3)
+
+    def test_signed_get_retries_without_accept_on_403(self):
+        """signed_get tries Accept, then Content-Type, then empty"""
+        expected = {"type": "Note", "content": "hello"}
+
+        fail = MagicMock(ok=False, status_code=403)
+        fail.raise_for_status.side_effect = Exception("403")
+
+        succeed = MagicMock(ok=True, status_code=200)
+        succeed.json.return_value = expected
+
+        with patch('http_signatures._signed_request') as mock_req:
+            # First two attempts fail, third (no extra headers) succeeds
+            mock_req.side_effect = [fail, fail, succeed]
+
+            result = http_signatures.signed_get(
+                "https://example.com/outbox?page=1", self.config)
+            self.assertEqual(result, expected)
+            self.assertEqual(mock_req.call_count, 3)
+
+            first_headers = mock_req.call_args_list[0][1].get('extra_headers', {})
+            second_headers = mock_req.call_args_list[1][1].get('extra_headers', {})
+            third_headers = mock_req.call_args_list[2][1].get('extra_headers', {})
+            self.assertIn('Accept', first_headers)
+            self.assertIn('Content-Type', second_headers)
+            self.assertEqual(third_headers, {})
+
+    def test_signed_get_content_type_fallback(self):
+        """signed_get falls back to Content-Type when Accept fails"""
+        expected = {"type": "OrderedCollectionPage", "totalItems": 5}
+
+        fail = MagicMock(ok=False, status_code=403)
+        fail.raise_for_status.side_effect = Exception("403")
+
+        succeed = MagicMock(ok=True, status_code=200)
+        succeed.json.return_value = expected
+
+        with patch('http_signatures._signed_request') as mock_req:
+            # Accept fails, Content-Type succeeds
+            mock_req.side_effect = [fail, succeed]
+
+            result = http_signatures.signed_get(
+                "https://example.com/outbox?page=1", self.config)
+            self.assertEqual(result, expected)
+            self.assertEqual(mock_req.call_count, 2)
 
     def test_signed_get_returns_none_on_network_error(self):
         """signed_get returns None on network failure"""

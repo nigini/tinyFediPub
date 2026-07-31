@@ -361,16 +361,28 @@ def signed_get(url: str, config: dict) -> Optional[dict]:
     """
     Fetch a JSON document with an HTTP-signed GET.
 
+    Tries with ``Accept: application/activity+json`` first.
+    If that fails, tries with ``Content-Type`` instead (some
+    servers, e.g. Bookwyrm behind Cloudflare, block the Accept
+    header on paginated URLs).
+
     Returns the parsed JSON dict, or ``None`` on failure.
     """
-    try:
-        headers = {'Accept': 'application/activity+json, application/ld+json'}
-        r = _signed_request('GET', url, config, extra_headers=headers)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"Signed GET failed for {url}: {e}")
-        return None
+    strategies = [
+        {'Accept': 'application/activity+json, application/ld+json'},
+        {'Content-Type': 'application/activity+json'},
+        {},
+    ]
+    for headers in strategies:
+        try:
+            r = _signed_request('GET', url, config, extra_headers=headers)
+            r.raise_for_status()
+            return r.json()
+        except Exception:
+            continue
+
+    print(f"Signed GET failed for {url} (all strategies exhausted)")
+    return None
 
 
 def signed_post(url: str, body: dict, config: dict) -> bool:
